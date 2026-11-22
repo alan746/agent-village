@@ -35,14 +35,16 @@ class Store():
                 CREATE TABLE IF NOT EXISTS budget(
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 actor TEXT, input_tokens INTEGER, output_tokens INTEGER,
-                ts REAL
-                );
+                ts REAL);
                 CREATE TABLE IF NOT EXISTS event(
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 actor TEXT, type TEXT, content TEXT, 
-                ts REAL
-                )
+                ts REAL);
+                CREATE TABLE IF NOT EXISTS run_state(
+                    id INTEGER PRIMARY KEY CHECK (id = 1),
+                    step INTEGER, goal TEXT)
             """)
+            self._conn.execute("INSERT OR IGNORE INTO run_state(id, step, goal) VALUES (?, ?, ?)", (1, 0 ,""))
             self._conn.commit()
 
     def log(self, actor:str, type:str, content:str):
@@ -105,6 +107,25 @@ class Store():
         for row in rows:
             events.append(Event(*row))
         return events
+
+    def read_run_state(self) -> dict:
+        result = {}
+        with self._lock:
+            values = self._conn.execute("SELECT step, goal FROM run_state").fetchone()
+        result["step"] = values[0]
+        result["goal"] = values[1]
+        return result
+
+    def update_step(self):
+        with self._lock:
+            self._conn.execute("UPDATE run_state SET step = step + 1")
+            self._conn.commit()
+
+    def set_goal(self, goal: str):
+        with self._lock:
+            self._conn.execute("UPDATE run_state SET goal = ?", (goal,))
+            self._conn.commit()
+
 
 
             

@@ -18,6 +18,7 @@ INPUT_LIMIT = 50_000
 OUTPUT_LIMIT = 10_000
 MAX_TOKENS = 10_000
 MODEL_NAME = ["claude", "chatgpt", "deepseek"]
+ROLES = {"claude": "leader", "chatgpt": "worker", "deepseek": "worker"}
 GOAL = ("Together, build and maintain an open-source tool that is useful to "
         "university students. You decide what to build and how to organize.")
 
@@ -58,7 +59,7 @@ def run_model():
     balance = store.check_balance(INPUT_LIMIT, OUTPUT_LIMIT)
     villagers = {}
     for name in MODEL_NAME:
-        villagers[name] = (build_villager(name, goal, models[name], store, INPUT_LIMIT, OUTPUT_LIMIT, checkpointer))
+        villagers[name] = (build_villager(name, ROLES[name], goal, models[name], path, store, INPUT_LIMIT, OUTPUT_LIMIT, checkpointer))
     step = initial_values.get("step", 0)
     end_step = MAX_STEP + step
     while (step < end_step and balance["remaining_input_tokens"] > 0

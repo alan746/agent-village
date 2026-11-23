@@ -9,19 +9,38 @@ from store import Store
 
 MAX_STEPS_PER_TURN = 3
 
+ROLE_PROMPTS = {
+    "leader": (
+        "Your role: leader. Break the goal into concrete tasks with post_task, "
+        "read the results with read_submission, and mark a task done with done_task "
+        "once its result is good enough. You may also take tasks yourself."
+    ),
+    "worker": (
+        "Your role: worker. Check the task board with read_task, take a task with take_task, "
+        "and submit your result with submit_task. You cannot post tasks; "
+        "if you think a task is missing, suggest it in the chat."
+    ),
+}
+
 class VillageState(TypedDict):
     messages: Annotated[list[AnyMessage], add_messages]
     cursor: int
     steps_this_turn: int
 
-def build_villager(name:str, goal: str, model, store: Store,
+def build_villager(name:str, role: str, goal: str, model, path: str, store: Store,
                     input_tokens_limit: int, output_tokens_limit: int,checkpointer):
-    tools = make_tools(name, store, input_tokens_limit, output_tokens_limit)
+    tools = make_tools(name, role, path, store, input_tokens_limit, output_tokens_limit)
     model_with_tools = model.bind_tools(tools)
     system = SystemMessage(
         f"You are {name}, one of several AI agents living in a village. "
         f"The village goal: {goal} "
+        f"{ROLE_PROMPTS[role]} "
         "Coordinate with the others through post_chat. "
+        f"You act in turns, with at most {MAX_STEPS_PER_TURN} tool rounds per turn. "
+        f"All agents share one token budget: {input_tokens_limit} input tokens and "
+        f"{output_tokens_limit} output tokens in total. Every model call spends from it, "
+        "and when either runs out the whole village stops. "
+        "The remaining budget is shown at the start of each turn; you can also call check_balance. "
         "When you have nothing useful to do, reply without calling any tool."
     )
 
@@ -34,7 +53,10 @@ def build_villager(name:str, goal: str, model, store: Store,
                 other_messages.append(new_message)
         lines = ("\n".join(f"{other_message.actor}:{other_message.content}" for other_message in other_messages)) or "(none)"
         store.log(name, "wake", f"{len(other_messages)} new messages")
-        return {"messages": [HumanMessage(f"New chat messages since your last turn:\n{lines}")],
+        balance = store.check_balance(input_tokens_limit, output_tokens_limit)
+        budget_line = (f"Shared budget left: {balance['remaining_input_tokens']} input tokens, "
+                       f"{balance['remaining_output_tokens']} output tokens.")
+        return {"messages": [HumanMessage(f"{budget_line}\nNew chat messages since your last turn:\n{lines}")],
                 "cursor" : new_messages[-1].id if new_messages else cursor,
                 "steps_this_turn": 0}
 

@@ -130,7 +130,9 @@ def build_villager(name:str, role: str, goal: str, model, path: str, store: Stor
 
 
     def thinking(state: VillageState) -> dict:
-        response = model_with_tools.invoke([system, *state["messages"]])
+        system_with_summary = make_system(state.get("summary"))
+        summarized_until = state.get("summarized_until", 0)
+        response = model_with_tools.invoke([system_with_summary, *state["messages"][summarized_until:]])
         usage = response.usage_metadata if response.usage_metadata else {}
         store.spend(name, usage.get("input_tokens", 0), usage.get("output_tokens", 0))
         for call in response.tool_calls:
@@ -145,20 +147,22 @@ def build_villager(name:str, role: str, goal: str, model, path: str, store: Stor
     def after_think(state: VillageState) -> Literal["act", "__end__"]:
         return "act" if state["messages"][-1].tool_calls else "__end__"
 
-    def after_act(state:VillageState) -> Literal["thinking", "__end__"]:
+    def after_act(state: VillageState) -> Literal["compact", "__end__"]:
         balance = store.check_balance(input_tokens_limit, output_tokens_limit)
         if (state["steps_this_turn"] >= MAX_STEPS_PER_TURN or balance["remaining_input_tokens"] <= 0
             or balance["remaining_output_tokens"] <= 0):
             return "__end__"
         else:
-            return "thinking"
+            return "compact"
 
     builder = StateGraph(VillageState)
     builder.add_node("wake", wake)
+    builder.add_node("compact", compact)
     builder.add_node("thinking", thinking)
     builder.add_node("act", act)
     builder.add_edge(START, "wake")
-    builder.add_edge("wake", "thinking")
+    builder.add_edge("wake", "compact")
+    builder.add_edge("compact", "thinking")
     builder.add_conditional_edges("thinking", after_think)
     builder.add_conditional_edges("act", after_act)
     return builder.compile(checkpointer = checkpointer)

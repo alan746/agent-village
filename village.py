@@ -19,8 +19,6 @@ OUTPUT_LIMIT = 10_000
 MAX_TOKENS = 10_000
 MODEL_NAME = ["claude", "chatgpt", "deepseek"]
 ROLES = {"claude": "leader", "chatgpt": "worker", "deepseek": "worker"}
-GOAL = ("Together, build and maintain an open-source tool that is useful to "
-        "university students. You decide what to build and how to organize.")
 
 def make_models() -> dict:
     return {
@@ -43,7 +41,7 @@ def make_models() -> dict:
 
 
 def run_model():
-    initial_values = set_initial_values(sys.argv)
+    initial_values = set_initial_values(sys.argv[1:])
     Path("runs").mkdir(exist_ok=True)
     if "path" in initial_values:
         path = initial_values.get("path")
@@ -51,7 +49,7 @@ def run_model():
     else:
         path = f"runs/village_{time.strftime('%Y%m%d_%H%M%S')}.db"
         store =  Store(path)
-    goal = initial_values.get("goal", GOAL)
+    goal = initial_values["goal"]
     store.set_goal(goal)
     conn = sqlite3.connect(path, check_same_thread=False)
     checkpointer = SqliteSaver(conn)

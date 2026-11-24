@@ -1,5 +1,8 @@
+import hashlib
+import json
 from typing import Annotated, Literal, TypedDict
-from langchain_core.messages import AnyMessage, HumanMessage, SystemMessage
+from langchain_core.utils.function_calling import convert_to_openai_tool
+from langchain_core.messages import AnyMessage, HumanMessage, SystemMessage, ToolMessage
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.message import add_messages
 from langgraph.prebuilt import ToolNode
@@ -11,6 +14,7 @@ from store import Store
 MAX_STEPS_PER_TURN = 3
 COMPACT_TRIGGER = 6000
 COMPACT_KEEP_RATIO = 0.5
+THINKING_BLOCKS = ("thinking", "redacted_thinking")
 
 ROLE_PROMPTS = {
     "leader": (
@@ -51,6 +55,30 @@ def messages_to_transcript(messages: list[AnyMessage]) -> str:
             lines.append(f"[{message.name} returned] {message.text}")
     return "\n".join(lines)
 
+def interrupted_tool_results(messages: list[AnyMessage]) -> list[ToolMessage]:
+    answered = set()
+    for message in reversed(messages):
+        if message.type == "tool":
+            answered.add(message.tool_call_id)
+        elif message.type == "ai":
+            return [ToolMessage("This tool call was interrupted when the village stopped, so it may not have run. "
+                                "Check its effect before repeating it.", tool_call_id=call["id"], name=call["name"])
+                    for call in message.tool_calls if call["id"] not in answered]
+        else:
+            return []
+    return []
+
+def without_thinking(messages: list[AnyMessage]) -> list[AnyMessage]:
+    stripped = []
+    for message in messages:
+        if message.type != "ai" or not isinstance(message.content, list):
+            continue
+        content = [block for block in message.content
+                   if not (isinstance(block, dict) and block.get("type") in THINKING_BLOCKS)]
+        if len(content) != len(message.content):
+            stripped.append(message.model_copy(update={"content": content}))
+    return stripped
+
 def find_compact_boundary(messages: list[AnyMessage], start: int, keep: int) -> int:
     boundary = len(messages) - 1
     tokens = 0
@@ -69,6 +97,7 @@ class VillageState(TypedDict):
     steps_this_turn: int
     summary: str
     summarized_until: int
+    prefix: str
 
 def build_villager(name:str, role: str, goal: str, model, path: str, store: Store,
                     input_tokens_limit: int, output_tokens_limit: int,checkpointer):
@@ -86,6 +115,8 @@ def build_villager(name:str, role: str, goal: str, model, path: str, store: Stor
         "The remaining budget is shown at the start of each turn; you can also call check_balance. "
         "When you have nothing useful to do, reply without calling any tool."
     )
+    prefix = hashlib.sha256(json.dumps(
+        [system.content, [convert_to_openai_tool(t) for t in tools]], sort_keys=True).encode()).hexdigest()
 
     def wake(state: VillageState) -> dict:
         cursor = state.get("cursor", 0)
@@ -96,12 +127,20 @@ def build_villager(name:str, role: str, goal: str, model, path: str, store: Stor
                 other_messages.append(new_message)
         lines = ("\n".join(f"{other_message.actor}:{other_message.content}" for other_message in other_messages)) or "(none)"
         store.log(name, "wake", f"{len(other_messages)} new messages")
+        stripped = []
+        if state.get("prefix") and state["prefix"] != prefix:
+            stripped = without_thinking(state["messages"][state.get("summarized_until", 0):])
+            store.log(name, "prefix_changed", f"system prompt or tools changed, removed thinking from {len(stripped)} messages")
+        repairs = interrupted_tool_results(state["messages"])
+        if repairs:
+            store.log(name, "resume_repair", f"answered {len(repairs)} interrupted tool calls")
         balance = store.check_balance(input_tokens_limit, output_tokens_limit)
         budget_line = (f"Shared budget left: {balance['remaining_input_tokens']} input tokens, "
                        f"{balance['remaining_output_tokens']} output tokens.")
-        return {"messages": [HumanMessage(f"{budget_line}\nNew chat messages since your last turn:\n{lines}")],
+        return {"messages": [*stripped, *repairs, HumanMessage(f"{budget_line}\nNew chat messages since your last turn:\n{lines}")],
                 "cursor" : new_messages[-1].id if new_messages else cursor,
-                "steps_this_turn": 0}
+                "steps_this_turn": 0,
+                "prefix": prefix}
     
     def make_system(summary: str) -> SystemMessage:
         if not summary:
@@ -130,8 +169,8 @@ def build_villager(name:str, role: str, goal: str, model, path: str, store: Stor
             store.log(name, "compact", "summary was empty, skipped")
             return {}
         store.log(name, "compact", f"summarized messages {summarized_until}-{compact_from - 1}")
-
-        return {"summary": new_summary, "summarized_until": compact_from}
+        stripped = without_thinking(state["messages"][compact_from:])
+        return {"summary": new_summary, "summarized_until": compact_from, "messages": stripped}
 
 
     def thinking(state: VillageState) -> dict:

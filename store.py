@@ -35,7 +35,7 @@ class Store():
                 CREATE TABLE IF NOT EXISTS budget(
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 actor TEXT, input_tokens INTEGER, output_tokens INTEGER,
-                ts REAL);
+                ts REAL, event TEXT DEFAULT 'thinking');
                 CREATE TABLE IF NOT EXISTS event(
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 actor TEXT, type TEXT, content TEXT, 
@@ -93,12 +93,12 @@ class Store():
                 remaining_output_tokens -= bills[i].output_tokens
             return {"remaining_input_tokens": remaining_input_tokens, "remaining_output_tokens": remaining_output_tokens}
 
-    def spend(self, actor: str, input_tokens: int, output_tokens: int):
+    def spend(self, actor: str,input_tokens: int, output_tokens: int, event:str = "thinking"):
         with self._lock:
-            self._conn.execute("INSERT INTO budget(actor, input_tokens, output_tokens, ts) VALUES(?,?,?,?)",
-                               (actor, input_tokens, output_tokens, time.time()))
+            self._conn.execute("INSERT INTO budget(actor, input_tokens, output_tokens, ts, event) VALUES(?,?,?,?,?)",
+                               (actor, input_tokens, output_tokens, time.time(), event))
             self._conn.commit()
-        self.log(actor, "spend", f"input_tokens = {input_tokens}, output_tokens = {output_tokens}")
+        self.log(actor, "spend", f"{event}: input_tokens = {input_tokens}, output_tokens = {output_tokens}")
 
     def read_event(self) -> list[Event]:
         events = []

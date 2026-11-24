@@ -10,9 +10,8 @@ from langchain_core.messages.utils import count_tokens_approximately
 
 from tool import make_tools
 from store import Store
+from persistence import Limits
 
-MAX_STEPS_PER_TURN = 3
-COMPACT_TRIGGER = 6000
 COMPACT_KEEP_RATIO = 0.5
 THINKING_BLOCKS = ("thinking", "redacted_thinking")
 
@@ -68,6 +67,14 @@ def interrupted_tool_results(messages: list[AnyMessage]) -> list[ToolMessage]:
             return []
     return []
 
+def record_usage(store: Store, name: str, response: AnyMessage, event: str):
+    usage = response.usage_metadata or {}
+    details = usage.get("input_token_details") or {}
+    cache_write = sum(details.get(key) or 0 for key in
+                      ("cache_creation", "ephemeral_5m_input_tokens", "ephemeral_1h_input_tokens"))
+    store.spend(name, usage.get("input_tokens", 0), usage.get("output_tokens", 0), event,
+                details.get("cache_read") or 0, cache_write)
+
 def without_thinking(messages: list[AnyMessage]) -> list[AnyMessage]:
     stripped = []
     for message in messages:
@@ -99,18 +106,17 @@ class VillageState(TypedDict):
     summarized_until: int
     prefix: str
 
-def build_villager(name:str, role: str, goal: str, model, path: str, store: Store,
-                    input_tokens_limit: int, output_tokens_limit: int,checkpointer):
-    tools = make_tools(name, role, path, store, input_tokens_limit, output_tokens_limit)
+def build_villager(name: str, role: str, goal: str, model, path: str, store: Store, limits: Limits, checkpointer):
+    tools = make_tools(name, role, path, store, limits)
     model_with_tools = model.bind_tools(tools)
     system = SystemMessage(
         f"You are {name}, one of several AI agents living in a village. "
         f"The village goal: {goal}\n"
         f"{ROLE_PROMPTS[role]} "
         "Coordinate with the others through post_chat. "
-        f"You act in turns, with at most {MAX_STEPS_PER_TURN} tool rounds per turn. "
-        f"All agents share one token budget: {input_tokens_limit} input tokens and "
-        f"{output_tokens_limit} output tokens in total. Every model call spends from it, "
+        f"You act in turns, with at most {limits.max_tool_rounds} tool rounds per turn. "
+        f"All agents share one token budget: {limits.input_budget} input tokens and "
+        f"{limits.output_budget} output tokens in total. Every model call spends from it, "
         "and when either runs out the whole village stops. "
         "The remaining budget is shown at the start of each turn; you can also call check_balance. "
         "When you have nothing useful to do, reply without calling any tool."
@@ -134,7 +140,7 @@ def build_villager(name:str, role: str, goal: str, model, path: str, store: Stor
         repairs = interrupted_tool_results(state["messages"])
         if repairs:
             store.log(name, "resume_repair", f"answered {len(repairs)} interrupted tool calls")
-        balance = store.check_balance(input_tokens_limit, output_tokens_limit)
+        balance = store.check_balance(limits.input_budget, limits.output_budget)
         budget_line = (f"Shared budget left: {balance['remaining_input_tokens']} input tokens, "
                        f"{balance['remaining_output_tokens']} output tokens.")
         return {"messages": [*stripped, *repairs, HumanMessage(f"{budget_line}\nNew chat messages since your last turn:\n{lines}")],
@@ -151,9 +157,10 @@ def build_villager(name:str, role: str, goal: str, model, path: str, store: Stor
         system_with_summary = make_system(state.get("summary"))
         summarized_until = state.get("summarized_until", 0)
         size = count_tokens_approximately([system_with_summary] + state["messages"][summarized_until:], tools=tools)
-        if(size <= COMPACT_TRIGGER): return {}
+        if size <= limits.compact_trigger:
+            return {}
         fixed = count_tokens_approximately([system], tools=tools)
-        keep = int((COMPACT_TRIGGER - fixed) * COMPACT_KEEP_RATIO)
+        keep = int((limits.compact_trigger - fixed) * COMPACT_KEEP_RATIO)
         compact_from = find_compact_boundary(state["messages"], summarized_until, keep)
         if compact_from <= summarized_until:
             return {}
@@ -162,8 +169,7 @@ def build_villager(name:str, role: str, goal: str, model, path: str, store: Stor
 
         prompt = SUMMARY_PROMPT.format(name=name, old_summary=state.get("summary") or "(none)", transcript=lines)
         response = model.invoke([HumanMessage(prompt)])
-        usage = response.usage_metadata if response.usage_metadata else {}
-        store.spend(name, usage.get("input_tokens", 0), usage.get("output_tokens", 0), event="compact")
+        record_usage(store, name, response, "compact")
         new_summary = str(response.text).strip()
         if not new_summary:
             store.log(name, "compact", "summary was empty, skipped")
@@ -177,8 +183,7 @@ def build_villager(name:str, role: str, goal: str, model, path: str, store: Stor
         system_with_summary = make_system(state.get("summary"))
         summarized_until = state.get("summarized_until", 0)
         response = model_with_tools.invoke([system_with_summary, *state["messages"][summarized_until:]])
-        usage = response.usage_metadata if response.usage_metadata else {}
-        store.spend(name, usage.get("input_tokens", 0), usage.get("output_tokens", 0))
+        record_usage(store, name, response, "thinking")
         if response.text.strip():
             store.log(name, "say", response.text)
         for call in response.tool_calls:
@@ -194,8 +199,8 @@ def build_villager(name:str, role: str, goal: str, model, path: str, store: Stor
         return "act" if state["messages"][-1].tool_calls else "__end__"
 
     def after_act(state: VillageState) -> Literal["compact", "__end__"]:
-        balance = store.check_balance(input_tokens_limit, output_tokens_limit)
-        if (state["steps_this_turn"] >= MAX_STEPS_PER_TURN or balance["remaining_input_tokens"] <= 0
+        balance = store.check_balance(limits.input_budget, limits.output_budget)
+        if (state["steps_this_turn"] >= limits.max_tool_rounds or balance["remaining_input_tokens"] <= 0
             or balance["remaining_output_tokens"] <= 0):
             return "__end__"
         else:

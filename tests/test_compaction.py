@@ -5,6 +5,7 @@ from langchain_core.messages import AIMessage
 from langgraph.checkpoint.sqlite import SqliteSaver
 
 import villager
+from persistence import Limits
 from store import Store
 from test_resume import ScriptedModel
 
@@ -37,14 +38,13 @@ class BindingCheckModel(ScriptedModel):
         return result
 
 
-def test_compaction_keeps_every_replayed_thinking_block_valid(tmp_path, monkeypatch):
-    monkeypatch.setattr(villager, "COMPACT_TRIGGER", 2500)
+def test_compaction_keeps_every_replayed_thinking_block_valid(tmp_path):
     path = str(tmp_path / "village.db")
     store = Store(path)
     responses = [AIMessage([{"type": "thinking", "thinking": "", "signature": f"sig{n}"},
                             {"type": "text", "text": f"reply {n} " + "words " * 300}]) for n in range(16)]
     model = BindingCheckModel(responses=responses)
-    graph = villager.build_villager("alice", "worker", "test goal", model, path, store, 10**6, 10**6,
+    graph = villager.build_villager("alice", "worker", "test goal", model, path, store, Limits(compact_trigger=2500),
                                     SqliteSaver(sqlite3.connect(path, check_same_thread=False)))
     config = {"configurable": {"thread_id": "alice"}}
     for turn in range(6):
@@ -64,7 +64,7 @@ def test_changed_system_prompt_on_resume_drops_old_thinking(tmp_path):
     model = BindingCheckModel(responses=responses)
     config = {"configurable": {"thread_id": "alice"}}
     for goal in ["first goal", "first goal", "second goal", "second goal"]:
-        graph = villager.build_villager("alice", "worker", goal, model, path, store, 10**6, 10**6,
+        graph = villager.build_villager("alice", "worker", goal, model, path, store, Limits(),
                                         SqliteSaver(sqlite3.connect(path, check_same_thread=False)))
         graph.invoke({"messages": []}, config)
     assert model.thinking_replayed == 2

@@ -35,7 +35,8 @@ class Store():
                 CREATE TABLE IF NOT EXISTS budget(
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 actor TEXT, input_tokens INTEGER, output_tokens INTEGER,
-                ts REAL, event TEXT DEFAULT 'thinking');
+                ts REAL, event TEXT DEFAULT 'thinking',
+                cache_read_tokens INTEGER DEFAULT 0, cache_write_tokens INTEGER DEFAULT 0);
                 CREATE TABLE IF NOT EXISTS event(
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 actor TEXT, type TEXT, content TEXT, 
@@ -90,12 +91,16 @@ class Store():
         return {"remaining_input_tokens": input_tokens_limit - spent_input,
                 "remaining_output_tokens": output_tokens_limit - spent_output}
 
-    def spend(self, actor: str,input_tokens: int, output_tokens: int, event:str = "thinking"):
+    def spend(self, actor: str, input_tokens: int, output_tokens: int, event: str = "thinking",
+              cache_read_tokens: int = 0, cache_write_tokens: int = 0):
         with self._lock:
-            self._conn.execute("INSERT INTO budget(actor, input_tokens, output_tokens, ts, event) VALUES(?,?,?,?,?)",
-                               (actor, input_tokens, output_tokens, time.time(), event))
+            self._conn.execute("""INSERT INTO budget(actor, input_tokens, output_tokens, ts, event,
+                               cache_read_tokens, cache_write_tokens) VALUES(?,?,?,?,?,?,?)""",
+                               (actor, input_tokens, output_tokens, time.time(), event,
+                                cache_read_tokens, cache_write_tokens))
             self._conn.commit()
-        self.log(actor, "spend", f"{event}: input_tokens = {input_tokens}, output_tokens = {output_tokens}")
+        self.log(actor, "spend", f"{event}: input_tokens = {input_tokens}, output_tokens = {output_tokens}, "
+                                 f"cache_read_tokens = {cache_read_tokens}, cache_write_tokens = {cache_write_tokens}")
 
     def read_event(self) -> list[Event]:
         events = []

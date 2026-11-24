@@ -2,8 +2,9 @@ from typing import Annotated
 from langchain_core.tools import tool
 from workspace import Workspace
 from store import Store
+from persistence import Limits
 
-def make_tools(actor: str, role: str, path: str, store: Store, input_tokens_limit: int, output_tokens_limit: int):
+def make_tools(actor: str, role: str, path: str, store: Store, limits: Limits):
     workspace = Workspace(path)
     @tool
     def post_chat(content: Annotated[str, "The message to send to the shared village chat"]) -> str:
@@ -14,7 +15,7 @@ def make_tools(actor: str, role: str, path: str, store: Store, input_tokens_limi
     @tool
     def check_balance() -> str:
         """Return remaining output tokens and remaining input tokens"""
-        balance = store.check_balance(input_tokens_limit, output_tokens_limit)
+        balance = store.check_balance(limits.input_budget, limits.output_budget)
         return (f"remaining output tokens are {balance['remaining_output_tokens']}, "
                 f"remaining input tokens are {balance['remaining_input_tokens']}")
     

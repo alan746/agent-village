@@ -51,6 +51,18 @@ def messages_to_transcript(messages: list[AnyMessage]) -> str:
             lines.append(f"[{message.name} returned] {message.text}")
     return "\n".join(lines)
 
+def find_compact_boundary(messages: list[AnyMessage], start: int, keep: int) -> int:
+    boundary = len(messages) - 1
+    tokens = 0
+    while boundary > start:
+        tokens += count_tokens_approximately([messages[boundary]])
+        if tokens >= keep:
+            break
+        boundary -= 1
+    while boundary > start and messages[boundary].type != "human":
+        boundary -= 1
+    return boundary
+
 class VillageState(TypedDict):
     messages: Annotated[list[AnyMessage], add_messages]
     cursor: int
@@ -103,14 +115,7 @@ def build_villager(name:str, role: str, goal: str, model, path: str, store: Stor
         if(size <= COMPACT_TRIGGER): return {}
         fixed = count_tokens_approximately([system], tools=tools)
         keep = int((COMPACT_TRIGGER - fixed) * COMPACT_KEEP_RATIO)
-        tokens_current = 0
-        for i in range(len(state["messages"]) - 1, summarized_until, -1):
-            tokens_current += count_tokens_approximately([state["messages"][i]])
-            if tokens_current >= keep:
-                break
-        compact_from = i
-        while state["messages"][compact_from].type != "human" and compact_from > summarized_until:
-            compact_from -= 1
+        compact_from = find_compact_boundary(state["messages"], summarized_until, keep)
         if compact_from <= summarized_until:
             return {}
         messages = state["messages"][summarized_until:compact_from]
@@ -135,8 +140,10 @@ def build_villager(name:str, role: str, goal: str, model, path: str, store: Stor
         response = model_with_tools.invoke([system_with_summary, *state["messages"][summarized_until:]])
         usage = response.usage_metadata if response.usage_metadata else {}
         store.spend(name, usage.get("input_tokens", 0), usage.get("output_tokens", 0))
+        if response.text.strip():
+            store.log(name, "say", response.text)
         for call in response.tool_calls:
-            store.log(name, "tool_use", f"{call["name"]}: {call["args"]}")
+            store.log(name, "tool_use", f"{call['name']}: {call['args']}")
         return {
             "messages": response,
             "steps_this_turn": state["steps_this_turn"] + 1

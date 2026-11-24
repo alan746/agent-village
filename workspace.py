@@ -1,15 +1,25 @@
-from store import Store
 import threading
 import sqlite3
 from dataclasses import dataclass
 
-@dataclass 
+@dataclass
 class Task:
     id: int
     creator: str
     description: str
     max_workers: int
-    status: str
+    done: bool
+    workers: list[str]
+
+    @property
+    def status(self) -> str:
+        if self.done:
+            return "done"
+        if not self.workers:
+            return "open"
+        if len(self.workers) < self.max_workers:
+            return "in progress, can take more workers"
+        return "in progress, full"
 
 @dataclass
 class Submission:
@@ -17,6 +27,7 @@ class Submission:
     task_id: int
     worker: str
     result: str
+    version: int
 
 class Workspace():
     def __init__(self, path:str = "village.db"):
@@ -30,7 +41,8 @@ class Workspace():
                 status TEXT CHECK (status IN ('assigned', 'done', 'not_assigned')));
                 CREATE TABLE IF NOT EXISTS submission(
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                task_id INTEGER, worker TEXT, result TEXT);
+                task_id INTEGER, worker TEXT, result TEXT, version INTEGER DEFAULT 1,
+                UNIQUE (task_id, worker));
                 CREATE TABLE IF NOT EXISTS task_worker(
                 task_id INTEGER, worker TEXT,
                 PRIMARY KEY (task_id, worker))
@@ -39,109 +51,98 @@ class Workspace():
             self._conn.commit()
 
     def post_task(self, creator: str, description: str, max_workers: int) -> str:
+        if max_workers < 1:
+            return "max_workers must be at least 1."
         with self._lock:
             cur = self._conn.execute("""
-            INSERT OR IGNORE INTO workspace
-            (creator, description, max_workers, status) VALUES (?,?,?,?)""", 
+            INSERT INTO workspace
+            (creator, description, max_workers, status) VALUES (?,?,?,?)""",
             (creator, description, max_workers, "not_assigned"))
             task_id = cur.lastrowid
             self._conn.commit()
-        return f"You successfully post task where id is {task_id}"
+        return f"You posted task {task_id}."
+
+    def workers_of(self, task_id: int) -> list[str]:
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT worker FROM task_worker WHERE task_id = ? ORDER BY rowid", (task_id,)).fetchall()
+        return [row[0] for row in rows]
 
     def read_task(self) -> list[Task]:
-        tasks = []
         with self._lock:
             rows = self._conn.execute("""
-            SELECT id, creator, description, max_workers, status FROM workspace""").fetchall()
-            self._conn.commit()
-        for row in rows:
-            tasks.append(Task(*row))
-        return tasks
+            SELECT id, creator, description, max_workers, status FROM workspace ORDER BY id""").fetchall()
+            return [Task(id, creator, description, max_workers, status == "done", self.workers_of(id))
+                    for id, creator, description, max_workers, status in rows]
 
-    def check_belong(self, worker: str, task_id: int):
-        with self._lock:
-            rows = self._conn.execute("""
-            SELECT worker FROM task_worker WHERE task_id = ?""", (task_id,)).fetchall()
-            for row in rows:
-                if row[0] == worker:
-                    return True
-            self._conn.commit()
-        return False
-
+    def check_belong(self, worker: str, task_id: int) -> bool:
+        return worker in self.workers_of(task_id)
 
     def take_task(self, worker: str, task_id: int) -> str|int:
         with self._lock:
             row = self._conn.execute("""
             SELECT max_workers, status FROM workspace WHERE id = ?""", (task_id,)).fetchone()
-            if row == None:
-                return "This task_id does not exist"
+            if row is None:
+                return f"Task {task_id} does not exist."
             max_workers, status = row
-            rows = self._conn.execute("""
-            SELECT worker FROM task_worker WHERE task_id = ?""", (task_id,)).fetchall()
+            workers = self.workers_of(task_id)
             if status == "done":
-                return "This task has done"
-            if self.check_belong(worker, task_id):
-                return f"You have been taken this task already" 
-            elif len(rows) >= max_workers:
-                return f"The number of workers for this task reaches the limit"
-            else:
+                return f"Task {task_id} is already done."
+            if worker in workers:
+                return f"You have already taken task {task_id}."
+            if len(workers) >= max_workers:
+                return f"Task {task_id} already has the maximum of {max_workers} workers: {', '.join(workers)}."
+            self._conn.execute("""
+            INSERT INTO task_worker (task_id, worker) VALUES(?, ?)""", (task_id, worker))
+            if len(workers) + 1 >= max_workers:
                 self._conn.execute("""
-                INSERT OR IGNORE INTO task_worker (task_id, worker) VALUES(?, ?)""", (task_id, worker))
-                if(len(rows) + 1) == max_workers:
-                    self._conn.execute("""
-                    UPDATE workspace SET status = ? WHERE id = ?""", ("assigned", task_id))
+                UPDATE workspace SET status = ? WHERE id = ?""", ("assigned", task_id))
             self._conn.commit()
         return task_id
-        
-    def summbit_task(self, worker: str, task_id: int, result: str) -> str:
-        if not (self.check_belong(worker, task_id)):
-            return f"You do not have premission to sumbit the task for this task_id"
-        else:
-            self._conn.execute("""
-            INSERT OR IGNORE INTO submission(worker, task_id, result) VALUES(?, ?, ?)""", (worker, task_id, result))
-            self._conn.commit()
-            return "Your result has successfully submitted"
-        
-    def read_submission(self, task_id: int = None, worker: str = None) -> list[Submission]:
-        submissions = []
-        if task_id == None and worker == None: 
-            with self._lock:
-                rows = self._conn.execute("""SELECT id, task_id, worker, result FROM submission""")
-                self._conn.commit()
-            for row in rows:
-                submissions.append(Submission(*row))
-        elif worker == None and task_id != None:
-            with self._lock:
-                rows = self._conn.execute("""SELECT id, task_id, worker, result FROM submission WHERE task_id = ?""", (task_id, ))
-                self._conn.commit()
-            for row in rows:
-                submissions.append(Submission(*row))
-        elif worker != None and task_id == None:
-            with self._lock:
-                rows = self._conn.execute("""SELECT id, task_id, worker, result FROM submission WHERE worker = ?""", (worker, ))
-                self._conn.commit()
-            for row in rows:
-                submissions.append(Submission(*row))
-        else:
-            with self._lock:
-                rows = self._conn.execute("""SELECT id, task_id, worker, result FROM submission WHERE task_id = ? AND worker = ?""", (task_id, worker))
-                self._conn.commit()
-            for row in rows:
-                submissions.append(Submission(*row))
-        return submissions
-    
-    def check_task_exist(self, id: int) -> bool:
-        with self._lock:
-            task_ids = self._conn.execute("SELECT id FROM workspace WHERE id = ?", (id,)).fetchall()
-            self._conn.commit()
-        if len(task_ids) == 0:
-            return False
-        return True
 
-    def done_task(self, id: int) -> str:
-        if not (self.check_task_exist(id)):
-            return f"No such task exists"
+    def submit_task(self, worker: str, task_id: int, result: str) -> str:
         with self._lock:
-            self._conn.execute("UPDATE workspace SET status = ? WHERE id = ?", ("done", id))
+            row = self._conn.execute("SELECT status FROM workspace WHERE id = ?", (task_id,)).fetchone()
+            if row is None:
+                return f"Task {task_id} does not exist."
+            if row[0] == "done":
+                return f"Task {task_id} is already done and no longer accepts submissions."
+            if not self.check_belong(worker, task_id):
+                return f"You have not taken task {task_id}; take it before submitting."
+            self._conn.execute("""
+            INSERT INTO submission(task_id, worker, result) VALUES(?, ?, ?)
+            ON CONFLICT(task_id, worker) DO UPDATE SET result = excluded.result, version = version + 1""",
+            (task_id, worker, result))
+            version = self._conn.execute(
+                "SELECT version FROM submission WHERE task_id = ? AND worker = ?", (task_id, worker)).fetchone()[0]
             self._conn.commit()
-        return f"Set status to done for this task"
+        if version == 1:
+            return f"Your result for task {task_id} was submitted."
+        return f"Your result for task {task_id} was updated to version {version}; it replaces your previous submission."
+
+    def read_submission(self, task_id: int | None = None, worker: str | None = None) -> list[Submission]:
+        query = "SELECT id, task_id, worker, result, version FROM submission WHERE 1 = 1"
+        params = []
+        if task_id is not None:
+            query += " AND task_id = ?"
+            params.append(task_id)
+        if worker is not None:
+            query += " AND worker = ?"
+            params.append(worker)
+        with self._lock:
+            rows = self._conn.execute(query + " ORDER BY id", params).fetchall()
+        return [Submission(*row) for row in rows]
+
+    def done_task(self, task_id: int) -> str:
+        with self._lock:
+            row = self._conn.execute("SELECT status FROM workspace WHERE id = ?", (task_id,)).fetchone()
+            if row is None:
+                return f"Task {task_id} does not exist."
+            if row[0] == "done":
+                return f"Task {task_id} is already done."
+            if not self.read_submission(task_id):
+                return (f"Task {task_id} has no submissions yet, so it was not marked done. "
+                        "Wait for a worker to submit, or take it and submit a note yourself.")
+            self._conn.execute("UPDATE workspace SET status = ? WHERE id = ?", ("done", task_id))
+            self._conn.commit()
+        return f"Task {task_id} is marked done."

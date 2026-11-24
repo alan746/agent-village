@@ -84,14 +84,11 @@ class Store():
         return bills
 
     def check_balance(self, input_tokens_limit, output_tokens_limit) -> dict:
-            """Return remaining output tokens and remaining input tokens"""
-            remaining_output_tokens = output_tokens_limit
-            remaining_input_tokens = input_tokens_limit
-            bills = self.read_bill()
-            for i in range(0, len(bills)):
-                remaining_input_tokens -= bills[i].input_tokens
-                remaining_output_tokens -= bills[i].output_tokens
-            return {"remaining_input_tokens": remaining_input_tokens, "remaining_output_tokens": remaining_output_tokens}
+        with self._lock:
+            spent_input, spent_output = self._conn.execute(
+                "SELECT COALESCE(SUM(input_tokens), 0), COALESCE(SUM(output_tokens), 0) FROM budget").fetchone()
+        return {"remaining_input_tokens": input_tokens_limit - spent_input,
+                "remaining_output_tokens": output_tokens_limit - spent_output}
 
     def spend(self, actor: str,input_tokens: int, output_tokens: int, event:str = "thinking"):
         with self._lock:

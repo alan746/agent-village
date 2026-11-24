@@ -62,13 +62,24 @@ def run_model():
         villagers[name] = (build_villager(name, ROLES[name], goal, models[name], path, store, INPUT_LIMIT, OUTPUT_LIMIT, checkpointer))
     step = initial_values.get("step", 0)
     end_step = MAX_STEP + step
+    failures = 0
     while (step < end_step and balance["remaining_input_tokens"] > 0
             and balance["remaining_output_tokens"] > 0):
         name = MODEL_NAME[step % len(MODEL_NAME)]
-        villagers[name].invoke({"messages": []}, {"configurable": {"thread_id": name}, "recursion_limit": 50})
+        try:
+            villagers[name].invoke({"messages": []}, {"configurable": {"thread_id": name}, "recursion_limit": 50})
+            failures = 0
+        except Exception as error:
+            failures += 1
+            store.log(name, "turn_error", f"{type(error).__name__}: {error}")
+            print(f"{name}: turn failed ({type(error).__name__}: {error})", file=sys.stderr)
         balance = store.check_balance(INPUT_LIMIT, OUTPUT_LIMIT)
         step += 1
         store.update_step()
+        if failures >= len(MODEL_NAME):
+            store.log("village", "stopped", f"{failures} consecutive failed turns")
+            print(f"Stopping: {failures} consecutive failed turns", file=sys.stderr)
+            break
 
 if __name__ == "__main__":
     run_model()

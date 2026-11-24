@@ -1,23 +1,22 @@
 from typing import Annotated
 from langchain_core.tools import tool
-from workspace import Workspace, Task, Submission
-
-from dataclasses import asdict
-
+from workspace import Workspace
 from store import Store
 
 def make_tools(actor: str, role: str, path: str, store: Store, input_tokens_limit: int, output_tokens_limit: int):
     workspace = Workspace(path)
     @tool
-    def post_chat(content: Annotated[str, "The content we want to send to the chat"]):
-        """Post new messages into chat"""
+    def post_chat(content: Annotated[str, "The message to send to the shared village chat"]) -> str:
+        """Post a message to the shared village chat. Every other agent sees it at the start of their next turn."""
         store.post_chat(actor, content)
+        return "Message posted to the chat."
 
     @tool
     def check_balance() -> str:
         """Return remaining output tokens and remaining input tokens"""
         balance = store.check_balance(input_tokens_limit, output_tokens_limit)
-        return f"remaining output tokens are {balance["remaining_output_tokens"]}, remaining input tokens are {balance["remaining_input_tokens"]}"
+        return (f"remaining output tokens are {balance['remaining_output_tokens']}, "
+                f"remaining input tokens are {balance['remaining_input_tokens']}")
     
     @tool
     def read_task() -> str:
@@ -25,8 +24,8 @@ def make_tools(actor: str, role: str, path: str, store: Store, input_tokens_limi
         results = workspace.read_task()
         if not results:
             return "There are no tasks on the board."
-        lines = [f"task {t.id}: {t.description} (posted by {t.creator}, "
-                f"max {t.max_workers} workers, status: {t.status})" for t in results]
+        lines = [f"task {t.id}: {t.description} (posted by {t.creator}, status: {t.status}, "
+                 f"workers {len(t.workers)}/{t.max_workers}: {', '.join(t.workers) or 'none'})" for t in results]
         return "\n".join(lines)
 
     @tool
@@ -48,8 +47,8 @@ def make_tools(actor: str, role: str, path: str, store: Store, input_tokens_limi
     @tool
     def submit_task(task_id: Annotated[int, "The id of the task you are submitting a result for"],
                     result: Annotated[str, "Your result for this task"]) -> str:
-        """Submit your result for a task you have taken. Other agents can read it afterwards."""
-        message = workspace.summbit_task(actor, task_id, result)
+        """Submit your result for a task you have taken. Other agents can read it afterwards. Submitting again replaces your earlier result for that task."""
+        message = workspace.submit_task(actor, task_id, result)
         store.log(actor, "submit_task", f"task {task_id} -> {message}")
         return message
 
@@ -60,12 +59,12 @@ def make_tools(actor: str, role: str, path: str, store: Store, input_tokens_limi
         results = workspace.read_submission(task_id, worker)
         if not results:
             return "No matching submissions."
-        lines = [f"submission {s.id} for task {s.task_id} by {s.worker}:\n{s.result}" for s in results]
+        lines = [f"submission {s.id} for task {s.task_id} by {s.worker} (version {s.version}):\n{s.result}" for s in results]
         return "\n\n".join(lines)
 
     @tool
     def done_task(task_id: Annotated[int, "The id of the task to mark as done"]) -> str:
-        """Mark a task as done after checking its submitted results. A done task cannot be taken anymore."""
+        """Mark a task as done after checking its submitted results. A task needs at least one submission to be marked done. A done task cannot be taken or submitted to anymore."""
         message = workspace.done_task(task_id)
         store.log(actor, "done_task", f"task {task_id} -> {message}")
         return message

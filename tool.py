@@ -84,7 +84,7 @@ def make_tools(actor: str, role: str, path: str, store: Store, limits: Limits, s
                   max_workers: Annotated[int, "How many agents can take this task at the same time"] = 2) -> str:
         """Post a new task on the task board so other agents can take it."""
         message = workspace.post_task(actor, description, max_workers)
-        store.log(actor, "post_task", f"{description} (max_workers={max_workers}) -> {message}")
+        log_event("post_task", description=description, max_workers=max_workers, outcome=message)
         return message
 
     @tool
@@ -92,7 +92,7 @@ def make_tools(actor: str, role: str, path: str, store: Store, limits: Limits, s
         """Take a task from the task board. You must take a task before you can submit a result for it."""
         outcome = workspace.take_task(actor, task_id)
         message = f"You took task {task_id}." if isinstance(outcome, int) else outcome
-        store.log(actor, "take_task", f"task {task_id} -> {message}")
+        log_event("take_task", task_id=task_id, outcome=message)
         return message
 
     @tool
@@ -100,7 +100,7 @@ def make_tools(actor: str, role: str, path: str, store: Store, limits: Limits, s
                     result: Annotated[str, "Your result for this task"]) -> str:
         """Submit your result for a task you have taken. Other agents can read it afterwards. Submitting again replaces your earlier result for that task."""
         message = workspace.submit_task(actor, task_id, result)
-        store.log(actor, "submit_task", f"task {task_id} -> {message}")
+        log_event("submit_task", task_id=task_id, result=result, outcome=message)
         return message
 
     @tool
@@ -117,7 +117,7 @@ def make_tools(actor: str, role: str, path: str, store: Store, limits: Limits, s
     def done_task(task_id: Annotated[int, "The id of the task to mark as done"]) -> str:
         """Mark a task as done after checking its submitted results. A task needs at least one submission to be marked done. A done task cannot be taken or submitted to anymore."""
         message = workspace.done_task(task_id)
-        store.log(actor, "done_task", f"task {task_id} -> {message}")
+        log_event("done_task", task_id=task_id, outcome=message)
         return message
 
     common_tools = [run_command, write_file, read_file, post_chat, check_balance,

@@ -174,3 +174,10 @@ def test_village_removes_containers_on_interrupt_and_errors(tmp_path, monkeypatc
     kinds = [e.type for e in store.read_event()]
     assert kinds.count("turn_error") == len(names)
     assert "stopped" in kinds
+    configs = [json.loads(e.content) for e in store.read_event() if e.type == "run_config"]
+    assert [c["mode"] for c in configs] == ["start", "resume"]
+    assert configs[1]["limits"]["rounds"] == 2 and configs[1]["models"]["claude"]
+    starts = [json.loads(e.content) for e in store.read_event() if e.type == "turn_start"]
+    assert [s["round"] for s in starts] == [1] * (len(names) + 1)
+    ends = [json.loads(e.content)["status"] for e in store.read_event() if e.type == "turn_end"]
+    assert ends == ["error"] * len(names)

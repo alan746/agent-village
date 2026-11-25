@@ -25,7 +25,10 @@ ROLE_PROMPTS = {
     "leader": (
         "Your role: leader. Break the goal into concrete tasks with post_task, "
         "read the results with read_submission and check the work in /repo, and mark a task done with done_task "
-        "once its result is good enough. You may also take tasks yourself."
+        "once its result is good enough. You may also take tasks yourself. "
+        "Keep every villager busy: split the work into tasks that can be done in parallel on different files, "
+        "and give villagers who would otherwise wait something useful to do, such as reviewing, testing "
+        "or preparing the next step."
     ),
     "worker": (
         "Your role: worker. Check the task board with read_task, take a task with take_task, "
@@ -133,6 +136,11 @@ def build_villager(name: str, role: str, goal: str, model, path: str, store: Sto
         "before you report it as finished.\n"
         "Coordinate with the others through post_chat. "
         f"You act in turns, with at most {limits.max_tool_rounds} tool rounds per turn. "
+        "Villagers act one at a time in a fixed order, so nothing in /repo, the chat or the task board changes "
+        "during your turn, and waiting or sleeping is pointless. End your turn to let the others act; you will "
+        "see what changed at the start of your next turn. The village keeps running for many rounds, so when the "
+        "current tasks are done, look for the next most valuable step toward the goal instead of declaring the "
+        "goal finished. "
         f"All agents share one token budget: {limits.input_budget} input tokens and "
         f"{limits.output_budget} output tokens in total. Every model call spends from it, "
         "and when either runs out the whole village stops. "

@@ -298,54 +298,150 @@ def completed_rounds(turns: list[Turn], marked: bool, size: int) -> int:
         rounds += 1
     return rounds
 
-def render(run_dir: Path) -> str:
+@dataclass
+class Run:
+    name: str
+    goal: str
+    events: list
+    timeline: list
+    turns: list
+    totals: dict
+    configs: list
+    models: dict
+    roles: dict
+    actors: list
+    size: int
+    marked: bool
+
+def collect(run_dir: Path) -> Run:
     events, budget, goal = load(run_dir / DB_NAME)
     timeline, turns, marked = build_timeline(events)
     totals = assign_usage(turns, budget)
     configs = [e for e in events if e.type == "run_config"]
-    latest = configs[-1].data() if configs else {}
-    models = latest.get("models", {}) if latest else {}
-    roles = latest.get("roles", {}) if latest else {}
+    latest = (configs[-1].data() or {}) if configs else {}
+    models = latest.get("models", {})
+    roles = latest.get("roles", {})
     actors = list(models) or list(dict.fromkeys([t.actor for t in turns] + list(totals)))
     size = len(models) or len(dict.fromkeys(t.actor for t in turns)) or 1
-    out = [f"# Village transcript: run {run_dir.name}", f"**Goal:** {goal}"]
-    if events:
-        out.append(f"**Started:** {stamp(events[0].ts, True)}  \n**Ended:** {stamp(events[-1].ts, True)}  \n"
-                   f"**Rounds completed:** {completed_rounds(turns, marked, size)}  \n**Turns:** {len(turns)}")
-    if not marked:
+    return Run(run_dir.name, goal, events, timeline, turns, totals, configs, models, roles, actors, size, marked)
+
+def header(run: Run) -> list[str]:
+    out = [f"# Village transcript: run {run.name}", f"**Goal:** {run.goal}"]
+    if run.events:
+        out.append(f"**Started:** {stamp(run.events[0].ts, True)}  \n**Ended:** {stamp(run.events[-1].ts, True)}  \n"
+                   f"**Rounds completed:** {completed_rounds(run.turns, run.marked, run.size)}  \n"
+                   f"**Turns:** {len(run.turns)}")
+    if not run.marked:
         out.append("> This run was recorded before turn and configuration events existed, so rounds are inferred "
                    "from the order of turns and models and limits are not known.")
     out.append("Search for `[FAILED]`, `[TURN ERROR]`, `[REJECTED]` and `[STOPPED]` to find problems.")
-    if models:
+    if run.models:
         out.append("## Villagers\n\n| Villager | Role | Model |\n|---|---|---|\n" + "\n".join(
-            f"| {actor} | {roles.get(actor, '')} | `{model}` |" for actor, model in models.items()))
-    if configs:
-        out.append("## Limits\n\n" + limits_table(configs))
-    out.append("## Tokens and commands\n\n" + summary_table(turns, totals, events, actors) +
+            f"| {actor} | {run.roles.get(actor, '')} | `{model}` |" for actor, model in run.models.items()))
+    if run.configs:
+        out.append("## Limits\n\n" + limits_table(run.configs))
+    out.append("## Tokens and commands\n\n" + summary_table(run.turns, run.totals, run.events, run.actors) +
                "\n\nInput tokens count every prompt token, cached or not; model calls include the calls that "
                "summarize a villager's memory during compaction.")
+    return out
+
+def render(run_dir: Path) -> str:
+    run = collect(run_dir)
+    out = header(run)
     out.append("## Timeline")
     current_round = None
-    for entry in timeline:
+    for entry in run.timeline:
         if isinstance(entry, Event):
             out.append(render_village_event(entry))
             continue
         if entry.round != current_round:
             current_round = entry.round
             out.append(f"## Round {current_round}")
-        out.append(render_turn(entry, roles))
+        out.append(render_turn(entry, run.roles))
     return "\n\n".join(out) + "\n"
+
+def group_rounds(timeline: list) -> list[tuple[int, list]]:
+    rounds, pending = [], []
+    for entry in timeline:
+        if isinstance(entry, Event):
+            if entry.type == "run_config" or pending or not rounds:
+                pending.append(entry)
+            else:
+                rounds[-1][1].append(entry)
+            continue
+        if not rounds or rounds[-1][0] != entry.round:
+            rounds.append((entry.round, []))
+        rounds[-1][1].extend(pending)
+        pending = []
+        rounds[-1][1].append(entry)
+    if pending:
+        if rounds:
+            rounds[-1][1].extend(pending)
+        else:
+            rounds.append((0, pending))
+    return rounds
+
+def round_file(number_: int) -> str:
+    return f"round-{number_:03d}.md"
+
+def round_row(number_: int, entries: list) -> str:
+    turns = [entry for entry in entries if isinstance(entry, Turn)]
+    events = [event for turn in turns for event in turn.events]
+    commands = [event.data() for event in events if event.type == "command" and event.data()]
+    errors = sum(1 for event in events if event.type == "turn_error")
+    started = stamp(turns[0].start, True) if turns else ""
+    acted = ", ".join(dict.fromkeys(turn.actor for turn in turns))
+    tokens_in = sum(turn.usage.input for turn in turns)
+    tokens_out = sum(turn.usage.output for turn in turns)
+    return (f"| [{number_}]({round_file(number_)}) | {started} | {acted} | {len(commands)} "
+            f"| {sum(failed(c) for c in commands)} | {errors} | {number(tokens_in)} | {number(tokens_out)} |")
+
+def render_split(run_dir: Path) -> dict[str, str]:
+    run = collect(run_dir)
+    rounds = group_rounds(run.timeline)
+    index = header(run)
+    index.append("## Rounds\n\n| Round | Started | Villagers | Commands | Failed commands | Turn errors "
+                 "| Input tokens | Output tokens |\n|---:|---|---|---:|---:|---:|---:|---:|\n" +
+                 "\n".join(round_row(number_, entries) for number_, entries in rounds))
+    files = {"README.md": "\n\n".join(index) + "\n"}
+    for position, (number_, entries) in enumerate(rounds):
+        links = ["[Index](README.md)"]
+        if position > 0:
+            links.append(f"[Previous round]({round_file(rounds[position - 1][0])})")
+        if position + 1 < len(rounds):
+            links.append(f"[Next round]({round_file(rounds[position + 1][0])})")
+        navigation = " · ".join(links)
+        out = [f"# Round {number_} of run {run.name}", navigation]
+        for entry in entries:
+            out.append(render_village_event(entry) if isinstance(entry, Event) else render_turn(entry, run.roles))
+        out.append(navigation)
+        files[round_file(number_)] = "\n\n".join(out) + "\n"
+    return files
 
 def main():
     parser = argparse.ArgumentParser(prog="transcript.py", description="Export a village run as Markdown.")
     parser.add_argument("run", nargs="?", default="",
                         help="run id, run directory or database path; the latest run by default")
+    parser.add_argument("--split", action="store_true",
+                        help="write a directory with an index README.md and one file per round, for long runs")
+    parser.add_argument("--output", metavar="PATH",
+                        help="file to write, or directory with --split; defaults to transcript.md or transcript/ "
+                             "in the run directory")
     args = parser.parse_args()
     run_dir = find_run(args.run)
     if run_dir is None:
         parser.error(f"no run found for {args.run!r}" if args.run else "there is no run in runs/")
-    target = run_dir / "transcript.md"
-    target.write_text(render(run_dir), encoding="utf-8")
+    if args.split:
+        target = Path(args.output) if args.output else run_dir / "transcript"
+        target.mkdir(parents=True, exist_ok=True)
+        for name in target.glob("round-*.md"):
+            name.unlink()
+        for name, text in render_split(run_dir).items():
+            (target / name).write_text(text, encoding="utf-8")
+    else:
+        target = Path(args.output) if args.output else run_dir / "transcript.md"
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(render(run_dir), encoding="utf-8")
     print(target)
 
 if __name__ == "__main__":

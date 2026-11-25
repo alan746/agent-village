@@ -63,6 +63,17 @@ def test_transcript_of_a_scripted_run(tmp_path, monkeypatch):
     assert text.count("python mean.py") == 1
     assert "Rounds completed:** 1" in text
 
+    files = transcript.render_split(run_dir)
+    assert sorted(files) == ["README.md", "round-001.md"]
+    index = files["README.md"]
+    assert "| **village** | 4 | 7 | 900 | 110 | 280 | 0 | 1 | 1 |" in index
+    assert "| [1](round-001.md) |" in index and "| 1 | 1 | 0 | 900 | 110 |" in index
+    assert "## Timeline" not in index
+    round_one = files["round-001.md"]
+    assert "[Index](README.md)" in round_one
+    assert "**[FAILED]** exit code 1" in round_one and "NameError" in round_one
+    assert round_one.find("**Run started**") < round_one.find("### claude") < round_one.find("### deepseek")
+
 
 def test_old_runs_without_turn_events_still_export(tmp_path):
     run_dir = tmp_path / "old"

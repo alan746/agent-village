@@ -1,0 +1,272 @@
+Commit history of the villagers' repository, oldest first.
+Exported from the run's /repo with git inside a container; times are UTC.
+Authors are the villagers: each container sets GIT_AUTHOR_NAME and GIT_COMMITTER_NAME to its villager.
+
+Tags
+----
+v0.1.0  annotated by gemini at 2026-11-24 08:56:34, on 2292168: Release v0.1.0: M1 Timetable core
+v0.2.0  annotated by gemini at 2026-11-24 09:35:55, on 4e81282: Release v0.2.0: M2 preference ranking search and benchmark
+v0.3.0  annotated by gemini at 2026-11-24 09:55:47, on 0f86b40: v0.3.0: M3 exports (iCalendar and HTML weekly view)
+v0.4.0  annotated by gemini at 2026-11-24 09:55:50, on 1d9ad1c: v0.4.0: M4 exams clash detection and campus travel warnings
+v1.0.0  annotated by chatgpt at 2026-11-24 10:12:40, on ab914e0: Release v1.0.0
+v1.0.1  annotated by gemini at 2026-11-24 10:19:38, on 49dd5f4: Release v1.0.1: Precise travel calculations and honest ranking search reporting
+v1.0.2  lightweight, on 5454a4c
+
+Commits (34)
+-------
+
+4f41390  2026-11-24 08:32:45  claude
+    Initial skeleton
+
+A	.gitignore
+A	planner/__init__.py
+
+f0e86fa  2026-11-24 08:33:35  chatgpt
+    Implement section CSV validation and conflict detection
+
+A	planner/conflicts.py
+A	planner/csvio.py
+A	planner/model.py
+A	tests/test_conflicts.py
+A	tests/test_csvio.py
+
+4e576c0  2026-11-24 08:36:17  chatgpt
+    Handle invalid encoding in CSV headers
+
+M	planner/csvio.py
+
+372d0c5  2026-11-24 08:38:44  chatgpt
+    Include line context for file read errors
+
+A	check.sh
+A	examples/bad_sections.csv
+A	examples/buildings.csv
+A	examples/exams.csv
+A	examples/malformed_sections.csv
+A	examples/sections.csv
+M	planner/csvio.py
+A	tests/gen_data.py
+A	tests/test_gen_data.py
+
+40434d2  2026-11-24 08:39:52  deepseek
+    M1b: CLI (conflicts/plan/show), backtracking solver with explanations, weekly grid
+
+A	planner/__main__.py
+A	planner/cli.py
+A	planner/show.py
+A	planner/solver.py
+A	pyproject.toml
+A	tests/test_cli.py
+A	tests/test_show.py
+A	tests/test_solver.py
+
+2292168  2026-11-24 08:40:37  gemini (tag: v0.1.0)
+    M1c: Add examples documentation and update .gitignore
+
+M	.gitignore
+A	examples/README.md
+
+e382c62  2026-11-24 08:59:08  chatgpt
+    Add exam CSV parsing and clash detection
+
+A	planner/exams.py
+A	tests/test_exams.py
+
+5fb176c  2026-11-24 09:05:24  chatgpt
+    Wire exam clash command into CLI
+
+M	planner/cli.py
+M	tests/test_exams.py
+
+4a85d5e  2026-11-24 09:11:32  chatgpt
+    Fix show window clipping and skip unusable sections
+
+M	planner/show.py
+M	tests/test_show.py
+M	tests/test_solver.py
+
+1e3454c  2026-11-24 09:17:20  deepseek
+    M2: preference ranking search, exact top-N, 40x5 benchmark
+
+A	planner/preferences.py
+A	planner/ranking.py
+M	planner/solver.py
+A	tests/benchmark.py
+A	tests/data/bench_40x5.csv
+A	tests/make_bench.py
+A	tests/test_ranking.py
+
+f4233ab  2026-11-24 09:20:58  deepseek
+    Ranking: sound incremental bound (tracks weakest stored metrics)
+
+M	planner/ranking.py
+
+deb4191  2026-11-24 09:22:33  gemini
+    M3: schedule export to iCalendar (.ics) and HTML weekly view
+
+M	check.sh
+M	planner/cli.py
+A	planner/export.py
+M	pyproject.toml
+A	requirements-dev.txt
+M	tests/test_cli.py
+A	tests/test_export.py
+
+8a67d18  2026-11-24 09:24:34  deepseek
+    Ranking: sound prune bound (metrics of worst stored schedule)
+
+M	planner/ranking.py
+M	tests/test_ranking.py
+
+91d7dd9  2026-11-24 09:26:57  chatgpt
+    Add campus walking-time warnings
+
+M	planner/cli.py
+A	planner/travel.py
+A	tests/test_travel.py
+
+4e81282  2026-11-24 09:31:14  deepseek (tag: v0.2.0)
+    Ranking: prune only on the monotonic prefix of the preference order
+
+M	planner/ranking.py
+M	tests/test_ranking.py
+
+897da4a  2026-11-24 09:32:16  gemini
+    M5b: README.md, CHANGELOG.md, and automated tests/test_readme.py runner
+
+A	CHANGELOG.md
+A	README.md
+A	tests/test_readme.py
+
+0f86b40  2026-11-24 09:42:17  gemini (tag: v0.3.0)
+    Fix export RFC 5545 control char escaping, HTML multi-hour grids, and UID collisions
+
+M	CHANGELOG.md
+M	README.md
+M	planner/export.py
+M	tests/test_export.py
+
+1d9ad1c  2026-11-24 09:45:31  chatgpt (tag: v0.4.0)
+    Report internal exam clashes and deduplicate travel warnings
+
+M	planner/exams.py
+M	planner/travel.py
+M	tests/test_exams.py
+M	tests/test_travel.py
+
+89b0632  2026-11-24 09:54:35  deepseek
+    Ranking: sound prune bound, honest schedule count; property-based fuzz suite
+
+M	.gitignore
+M	planner/ranking.py
+M	requirements-dev.txt
+A	tests/test_fuzz.py
+M	tests/test_ranking.py
+
+f891787  2026-11-24 10:01:48  gemini
+    Update check.sh hypothesis probe and align CHANGELOG with v0.3.0/v0.4.0 tags
+
+M	CHANGELOG.md
+M	check.sh
+
+a66e034  2026-11-24 10:05:29  chatgpt
+    Fix travel checks around overlapping meetings
+
+M	planner/travel.py
+A	tests/test_travel_edge_regression.py
+
+ab914e0  2026-11-24 10:09:12  gemini (tag: v1.0.0)
+    Fix --not-before validation on single-course plan and add preference hint
+
+M	planner/cli.py
+M	planner/preferences.py
+M	tests/test_cli.py
+
+edf0ae4  2026-11-24 10:14:42  chatgpt
+    Show travel distances to one decimal place
+
+M	CHANGELOG.md
+M	README.md
+M	planner/travel.py
+M	tests/test_travel.py
+
+522986a  2026-11-24 10:16:47  chatgpt
+    Show required walking times precisely
+
+M	CHANGELOG.md
+M	README.md
+M	planner/travel.py
+M	tests/test_travel.py
+
+f06c037  2026-11-24 10:18:09  deepseek
+    Ranking: honest best-found reporting when the search is not exhaustive
+
+M	CHANGELOG.md
+M	planner/cli.py
+M	planner/ranking.py
+M	tests/test_cli.py
+M	tests/test_fuzz.py
+M	tests/test_ranking.py
+
+49dd5f4  2026-11-24 10:19:20  gemini (tag: v1.0.1)
+    Update CHANGELOG for v1.0.0 and v1.0.1 releases
+
+M	CHANGELOG.md
+
+b7d2359  2026-11-24 10:21:10  deepseek
+    Rank a single course when --prefer is given instead of using the shortcut
+
+M	CHANGELOG.md
+M	planner/cli.py
+M	tests/test_cli.py
+
+6641a26  2026-11-24 10:23:46  deepseek
+    ICS: anchor DTSTART on the meeting's real weekday (was off for non-Monday term starts)
+
+M	planner/export.py
+M	tests/test_export.py
+
+8af5781  2026-11-24 10:27:52  gemini
+    Route single-course plan through ranking search on any ranking flag (--top, --not-before, --prefer)
+
+M	planner/cli.py
+M	tests/test_cli.py
+
+4aea1ae  2026-11-24 10:31:35  deepseek
+    Ranked listing: drop the misleading score, list metrics in priority order
+
+M	CHANGELOG.md
+M	planner/cli.py
+M	planner/preferences.py
+M	planner/ranking.py
+M	tests/test_cli.py
+M	tests/test_ranking.py
+
+6096471  2026-11-24 10:32:55  gemini
+    Update CHANGELOG for v1.0.2 release
+
+M	CHANGELOG.md
+
+2f0cf3c  2026-11-24 10:34:32  deepseek
+    README: add a tested ranking example (metrics in priority order, no score)
+
+M	README.md
+
+5454a4c  2026-11-24 10:35:14  gemini (tag: v1.0.2)
+    Update CHANGELOG.md with README ranking documentation in v1.0.2
+
+M	CHANGELOG.md
+
+d5babf3  2026-11-24 10:40:10  deepseek (HEAD -> main)
+    Accept 24:00 as an end-of-day end time; reject it as a start
+
+M	planner/csvio.py
+M	tests/test_cli.py
+M	tests/test_csvio.py
+
+Commits per author
+------------------
+    12	deepseek
+    11	chatgpt
+    10	gemini
+     1	claude

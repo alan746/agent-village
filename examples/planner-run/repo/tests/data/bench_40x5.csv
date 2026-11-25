@@ -1,0 +1,201 @@
+course,section,day,start,end,location
+C00,S0,Fri,17:00,18:00,Library
+C00,S1,Tue,09:00,10:00,Hall A
+C00,S2,Thu,14:00,15:00,Library
+C00,S3,Wed,14:00,15:00,Library
+C00,S4,Mon,10:00,11:00,Hall A
+C01,S0,Tue,10:00,11:00,Engineering Hall
+C01,S1,Tue,08:00,09:00,Engineering Hall
+C01,S2,Thu,17:00,18:00,Math Hall
+C01,S3,Fri,09:00,10:00,Math Hall
+C01,S4,Tue,17:00,18:00,Library
+C02,S0,Wed,11:00,12:00,Engineering Hall
+C02,S1,Mon,10:00,11:00,Science Center
+C02,S2,Mon,18:00,19:00,Hall A
+C02,S3,Wed,16:00,17:00,Library
+C02,S4,Tue,12:00,13:00,Engineering Hall
+C03,S0,Fri,16:00,17:00,Hall A
+C03,S1,Tue,13:00,14:00,Library
+C03,S2,Thu,17:00,18:00,Library
+C03,S3,Mon,14:00,15:00,Library
+C03,S4,Mon,16:00,17:00,Library
+C04,S0,Thu,15:00,16:00,Math Hall
+C04,S1,Fri,14:00,15:00,Science Center
+C04,S2,Fri,10:00,11:00,Library
+C04,S3,Fri,13:00,14:00,Engineering Hall
+C04,S4,Tue,14:00,15:00,Math Hall
+C05,S0,Tue,09:00,10:00,Engineering Hall
+C05,S1,Mon,08:00,09:00,Library
+C05,S2,Tue,14:00,15:00,Math Hall
+C05,S3,Thu,08:00,09:00,Math Hall
+C05,S4,Thu,10:00,11:00,Library
+C06,S0,Fri,09:00,10:00,Science Center
+C06,S1,Thu,18:00,19:00,Library
+C06,S2,Mon,13:00,14:00,Engineering Hall
+C06,S3,Mon,12:00,13:00,Library
+C06,S4,Tue,16:00,17:00,Math Hall
+C07,S0,Wed,14:00,15:00,Engineering Hall
+C07,S1,Fri,08:00,09:00,Math Hall
+C07,S2,Thu,13:00,14:00,Engineering Hall
+C07,S3,Tue,18:00,19:00,Hall A
+C07,S4,Fri,18:00,19:00,Science Center
+C08,S0,Wed,10:00,11:00,Hall A
+C08,S1,Wed,15:00,16:00,Library
+C08,S2,Tue,10:00,11:00,Engineering Hall
+C08,S3,Mon,09:00,10:00,Hall A
+C08,S4,Thu,10:00,11:00,Science Center
+C09,S0,Wed,12:00,13:00,Math Hall
+C09,S1,Thu,12:00,13:00,Math Hall
+C09,S2,Thu,08:00,09:00,Hall A
+C09,S3,Fri,14:00,15:00,Hall A
+C09,S4,Tue,15:00,16:00,Hall A
+C10,S0,Tue,15:00,16:00,Library
+C10,S1,Tue,17:00,18:00,Math Hall
+C10,S2,Thu,08:00,09:00,Library
+C10,S3,Wed,14:00,15:00,Library
+C10,S4,Mon,08:00,09:00,Math Hall
+C11,S0,Wed,09:00,10:00,Math Hall
+C11,S1,Mon,17:00,18:00,Library
+C11,S2,Thu,08:00,09:00,Engineering Hall
+C11,S3,Wed,08:00,09:00,Math Hall
+C11,S4,Fri,15:00,16:00,Library
+C12,S0,Thu,11:00,12:00,Science Center
+C12,S1,Tue,14:00,15:00,Library
+C12,S2,Wed,13:00,14:00,Library
+C12,S3,Wed,17:00,18:00,Hall A
+C12,S4,Thu,10:00,11:00,Engineering Hall
+C13,S0,Thu,11:00,12:00,Science Center
+C13,S1,Wed,11:00,12:00,Engineering Hall
+C13,S2,Mon,18:00,19:00,Science Center
+C13,S3,Mon,11:00,12:00,Science Center
+C13,S4,Thu,08:00,09:00,Hall A
+C14,S0,Tue,11:00,12:00,Hall A
+C14,S1,Tue,13:00,14:00,Hall A
+C14,S2,Mon,16:00,17:00,Science Center
+C14,S3,Wed,11:00,12:00,Engineering Hall
+C14,S4,Mon,16:00,17:00,Engineering Hall
+C15,S0,Thu,12:00,13:00,Science Center
+C15,S1,Mon,14:00,15:00,Science Center
+C15,S2,Tue,10:00,11:00,Math Hall
+C15,S3,Fri,14:00,15:00,Engineering Hall
+C15,S4,Mon,15:00,16:00,Hall A
+C16,S0,Fri,10:00,11:00,Math Hall
+C16,S1,Mon,09:00,10:00,Math Hall
+C16,S2,Wed,15:00,16:00,Engineering Hall
+C16,S3,Fri,12:00,13:00,Hall A
+C16,S4,Thu,11:00,12:00,Science Center
+C17,S0,Mon,16:00,17:00,Engineering Hall
+C17,S1,Thu,08:00,09:00,Hall A
+C17,S2,Mon,17:00,18:00,Library
+C17,S3,Wed,18:00,19:00,Library
+C17,S4,Tue,09:00,10:00,Engineering Hall
+C18,S0,Tue,17:00,18:00,Math Hall
+C18,S1,Thu,12:00,13:00,Math Hall
+C18,S2,Fri,10:00,11:00,Hall A
+C18,S3,Wed,14:00,15:00,Hall A
+C18,S4,Wed,12:00,13:00,Science Center
+C19,S0,Wed,10:00,11:00,Hall A
+C19,S1,Thu,10:00,11:00,Science Center
+C19,S2,Mon,15:00,16:00,Hall A
+C19,S3,Tue,11:00,12:00,Science Center
+C19,S4,Thu,11:00,12:00,Engineering Hall
+C20,S0,Fri,18:00,19:00,Hall A
+C20,S1,Thu,13:00,14:00,Engineering Hall
+C20,S2,Wed,18:00,19:00,Science Center
+C20,S3,Fri,11:00,12:00,Math Hall
+C20,S4,Fri,15:00,16:00,Math Hall
+C21,S0,Fri,15:00,16:00,Science Center
+C21,S1,Wed,08:00,09:00,Science Center
+C21,S2,Wed,18:00,19:00,Science Center
+C21,S3,Fri,13:00,14:00,Library
+C21,S4,Tue,11:00,12:00,Math Hall
+C22,S0,Mon,09:00,10:00,Science Center
+C22,S1,Tue,12:00,13:00,Hall A
+C22,S2,Thu,10:00,11:00,Engineering Hall
+C22,S3,Wed,09:00,10:00,Hall A
+C22,S4,Wed,13:00,14:00,Library
+C23,S0,Tue,08:00,09:00,Math Hall
+C23,S1,Thu,18:00,19:00,Library
+C23,S2,Wed,17:00,18:00,Math Hall
+C23,S3,Mon,17:00,18:00,Engineering Hall
+C23,S4,Thu,18:00,19:00,Math Hall
+C24,S0,Thu,12:00,13:00,Math Hall
+C24,S1,Mon,18:00,19:00,Library
+C24,S2,Mon,16:00,17:00,Science Center
+C24,S3,Tue,18:00,19:00,Engineering Hall
+C24,S4,Tue,14:00,15:00,Hall A
+C25,S0,Wed,17:00,18:00,Library
+C25,S1,Tue,09:00,10:00,Science Center
+C25,S2,Mon,13:00,14:00,Engineering Hall
+C25,S3,Tue,12:00,13:00,Science Center
+C25,S4,Tue,15:00,16:00,Math Hall
+C26,S0,Mon,12:00,13:00,Hall A
+C26,S1,Fri,09:00,10:00,Science Center
+C26,S2,Mon,08:00,09:00,Science Center
+C26,S3,Thu,15:00,16:00,Science Center
+C26,S4,Mon,12:00,13:00,Science Center
+C27,S0,Fri,14:00,15:00,Library
+C27,S1,Tue,13:00,14:00,Library
+C27,S2,Tue,15:00,16:00,Engineering Hall
+C27,S3,Wed,11:00,12:00,Hall A
+C27,S4,Mon,13:00,14:00,Math Hall
+C28,S0,Wed,17:00,18:00,Engineering Hall
+C28,S1,Mon,15:00,16:00,Library
+C28,S2,Fri,14:00,15:00,Hall A
+C28,S3,Thu,15:00,16:00,Engineering Hall
+C28,S4,Fri,17:00,18:00,Library
+C29,S0,Fri,13:00,14:00,Hall A
+C29,S1,Mon,12:00,13:00,Hall A
+C29,S2,Thu,11:00,12:00,Hall A
+C29,S3,Tue,17:00,18:00,Library
+C29,S4,Fri,17:00,18:00,Science Center
+C30,S0,Fri,13:00,14:00,Science Center
+C30,S1,Tue,08:00,09:00,Engineering Hall
+C30,S2,Wed,14:00,15:00,Library
+C30,S3,Thu,16:00,17:00,Engineering Hall
+C30,S4,Wed,10:00,11:00,Engineering Hall
+C31,S0,Fri,16:00,17:00,Library
+C31,S1,Tue,09:00,10:00,Engineering Hall
+C31,S2,Thu,17:00,18:00,Engineering Hall
+C31,S3,Thu,14:00,15:00,Engineering Hall
+C31,S4,Fri,12:00,13:00,Library
+C32,S0,Tue,14:00,15:00,Engineering Hall
+C32,S1,Tue,12:00,13:00,Engineering Hall
+C32,S2,Fri,10:00,11:00,Engineering Hall
+C32,S3,Wed,14:00,15:00,Engineering Hall
+C32,S4,Wed,13:00,14:00,Library
+C33,S0,Wed,09:00,10:00,Science Center
+C33,S1,Mon,14:00,15:00,Hall A
+C33,S2,Fri,15:00,16:00,Hall A
+C33,S3,Thu,13:00,14:00,Engineering Hall
+C33,S4,Tue,15:00,16:00,Engineering Hall
+C34,S0,Mon,11:00,12:00,Hall A
+C34,S1,Fri,09:00,10:00,Engineering Hall
+C34,S2,Wed,17:00,18:00,Hall A
+C34,S3,Tue,14:00,15:00,Math Hall
+C34,S4,Tue,16:00,17:00,Engineering Hall
+C35,S0,Fri,13:00,14:00,Science Center
+C35,S1,Tue,13:00,14:00,Hall A
+C35,S2,Mon,18:00,19:00,Library
+C35,S3,Mon,13:00,14:00,Library
+C35,S4,Tue,08:00,09:00,Engineering Hall
+C36,S0,Mon,18:00,19:00,Science Center
+C36,S1,Thu,10:00,11:00,Science Center
+C36,S2,Wed,17:00,18:00,Science Center
+C36,S3,Tue,08:00,09:00,Hall A
+C36,S4,Thu,11:00,12:00,Engineering Hall
+C37,S0,Fri,12:00,13:00,Engineering Hall
+C37,S1,Wed,15:00,16:00,Library
+C37,S2,Mon,15:00,16:00,Math Hall
+C37,S3,Thu,12:00,13:00,Hall A
+C37,S4,Mon,18:00,19:00,Science Center
+C38,S0,Mon,18:00,19:00,Math Hall
+C38,S1,Tue,12:00,13:00,Library
+C38,S2,Tue,11:00,12:00,Science Center
+C38,S3,Wed,13:00,14:00,Engineering Hall
+C38,S4,Wed,17:00,18:00,Engineering Hall
+C39,S0,Thu,17:00,18:00,Engineering Hall
+C39,S1,Tue,12:00,13:00,Science Center
+C39,S2,Mon,11:00,12:00,Library
+C39,S3,Thu,12:00,13:00,Math Hall
+C39,S4,Fri,10:00,11:00,Hall A

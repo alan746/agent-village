@@ -58,7 +58,7 @@ class Turn:
     status: str | None = None
 
 def load(db_path: Path):
-    conn = sqlite3.connect(db_path)
+    conn = sqlite3.connect(f"{Path(db_path).resolve().as_uri()}?mode=ro", uri=True)
     events = [Event(*row) for row in conn.execute("SELECT id, actor, type, content, ts FROM event ORDER BY id")]
     columns = {row[1] for row in conn.execute("PRAGMA table_info(budget)")}
     cache = ("cache_read_tokens, cache_write_tokens" if "cache_read_tokens" in columns else "0, 0")
@@ -437,11 +437,11 @@ def main():
         for name in target.glob("round-*.md"):
             name.unlink()
         for name, text in render_split(run_dir).items():
-            (target / name).write_text(text, encoding="utf-8")
+            (target / name).write_text(text, encoding="utf-8", newline="\n")
     else:
         target = Path(args.output) if args.output else run_dir / "transcript.md"
         target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_text(render(run_dir), encoding="utf-8")
+        target.write_text(render(run_dir), encoding="utf-8", newline="\n")
     print(target)
 
 if __name__ == "__main__":

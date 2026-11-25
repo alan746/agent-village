@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "planner"
+version = "0.1.0"
+description = "Plan a university term from a CSV of course sections."
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "MIT"}
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "pytest-cov",
+    "icalendar",
+]
+
+[project.scripts]
+planner = "planner.cli:main"
+
+[tool.setuptools]
+packages = ["planner"]

@@ -39,7 +39,7 @@ def make_models() -> dict:
             max_tokens=MAX_TOKENS,
             effort="medium",
             betas=["thinking-binding-controls-2026-08-01"],
-            thinking={"type": "adaptive", "block_binding": {"prefix_mismatch_behavior": "error"}},
+            thinking={"type": "adaptive", "block_binding": {"prefix_mismatch_behavior": "drop_block"}},
             model_kwargs={"cache_control": {"type": "ephemeral"}},
         ),
         "chatgpt": ChatOpenAI(

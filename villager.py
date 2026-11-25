@@ -11,19 +11,26 @@ from langchain_core.messages.utils import count_tokens_approximately
 from tool import make_tools
 from store import Store
 from persistence import Limits
+from sandbox import Sandbox
 
 COMPACT_KEEP_RATIO = 0.5
 THINKING_BLOCKS = ("thinking", "redacted_thinking")
 
+NETWORK_PROMPTS = {
+    True: "Your container has internet access, so you can install packages with pip install --user.",
+    False: "Your container has no internet access, so you cannot install packages.",
+}
+
 ROLE_PROMPTS = {
     "leader": (
         "Your role: leader. Break the goal into concrete tasks with post_task, "
-        "read the results with read_submission, and mark a task done with done_task "
+        "read the results with read_submission and check the work in /repo, and mark a task done with done_task "
         "once its result is good enough. You may also take tasks yourself."
     ),
     "worker": (
         "Your role: worker. Check the task board with read_task, take a task with take_task, "
-        "and submit your result with submit_task. You cannot post tasks; "
+        "do the work in /repo, and submit a short result with submit_task that says which files you changed "
+        "and how to check them. You cannot post tasks; "
         "if you think a task is missing, suggest it in the chat."
     ),
 }
@@ -32,7 +39,8 @@ SUMMARY_PROMPT = (
     "You are compressing the memory of {name}, an AI agent living in a village with other agents. "
     "Merge the previous summary and the new transcript into one updated summary, written for {name}. "
     "Keep: decisions and why they were made, unfinished work, task and submission IDs, "
-    "agreements with other agents, and concrete details such as formats, numbers and names. "
+    "agreements with other agents, files in /repo and what they contain, commands that work or fail, "
+    "and concrete details such as formats, numbers and names. "
     "Drop small talk and finished work that no longer matters. "
     "Leave out budget numbers; the current budget is shown every turn. "
     "Write under 200 words.\n\n"
@@ -106,13 +114,23 @@ class VillageState(TypedDict):
     summarized_until: int
     prefix: str
 
-def build_villager(name: str, role: str, goal: str, model, path: str, store: Store, limits: Limits, checkpointer):
-    tools = make_tools(name, role, path, store, limits)
+def build_villager(name: str, role: str, goal: str, model, path: str, store: Store, limits: Limits,
+                   checkpointer, sandbox: Sandbox):
+    tools = make_tools(name, role, path, store, limits, sandbox)
     model_with_tools = model.bind_tools(tools)
     system = SystemMessage(
         f"You are {name}, one of several AI agents living in a village. "
         f"The village goal: {goal}\n"
-        f"{ROLE_PROMPTS[role]} "
+        f"{ROLE_PROMPTS[role]}\n"
+        "You have your own Linux container with Python 3.12, git and pytest, where you work as a normal user "
+        "without root. Its working directory /repo is shared with every other agent: the files in /repo are the "
+        "village's real output, everyone sees changes there immediately, and they are kept after the village ends. "
+        "Anything outside /repo is private to your container and may be lost when the village restarts. "
+        f"{NETWORK_PROMPTS[sandbox.network]} "
+        "Use run_command to run shell commands, and write_file and read_file for files in /repo. "
+        f"Commands are killed after {limits.command_timeout} seconds. "
+        "Agree on who edits which files so you do not overwrite each other's work, and check that code runs "
+        "before you report it as finished.\n"
         "Coordinate with the others through post_chat. "
         f"You act in turns, with at most {limits.max_tool_rounds} tool rounds per turn. "
         f"All agents share one token budget: {limits.input_budget} input tokens and "
@@ -184,6 +202,10 @@ def build_villager(name: str, role: str, goal: str, model, path: str, store: Sto
         summarized_until = state.get("summarized_until", 0)
         response = model_with_tools.invoke([system_with_summary, *state["messages"][summarized_until:]])
         record_usage(store, name, response, "thinking")
+        dropped = [item for item in response.response_metadata.get("input_transformations") or []
+                   if item.get("type") == "thinking_dropped"]
+        if dropped:
+            store.log(name, "thinking_dropped", json.dumps(dropped))
         if response.text.strip():
             store.log(name, "say", response.text)
         for call in response.tool_calls:

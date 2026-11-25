@@ -7,6 +7,7 @@ from langchain_core.outputs import ChatGeneration, ChatResult
 from langgraph.checkpoint.sqlite import SqliteSaver
 
 from persistence import Limits
+from sandbox import Sandbox
 from store import Store
 from villager import build_villager
 
@@ -44,7 +45,8 @@ class ScriptedModel(BaseChatModel):
 
 def make_villager(path, store, model):
     checkpointer = SqliteSaver(sqlite3.connect(path, check_same_thread=False))
-    return build_villager("alice", "worker", "test goal", model, path, store, Limits(), checkpointer)
+    return build_villager("alice", "worker", "test goal", model, path, store, Limits(), checkpointer,
+                          Sandbox("offline-test", "."))
 
 
 def test_resume_after_crash_between_thinking_and_act(tmp_path, monkeypatch):

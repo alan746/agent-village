@@ -1,11 +1,61 @@
+import json
 from typing import Annotated
 from langchain_core.tools import tool
 from workspace import Workspace
 from store import Store
 from persistence import Limits
+from sandbox import Sandbox, CommandResult, PathError, WORKDIR
 
-def make_tools(actor: str, role: str, path: str, store: Store, limits: Limits):
+def command_report(result: CommandResult, timeout: int) -> str:
+    if result.timed_out:
+        status = f"timed out after {timeout} seconds and was killed (exit code {result.exit_code})"
+    else:
+        status = f"exit code: {result.exit_code}"
+    return f"{status}\nstdout:\n{result.stdout or '(empty)'}\nstderr:\n{result.stderr or '(empty)'}"
+
+def make_tools(actor: str, role: str, path: str, store: Store, limits: Limits, sandbox: Sandbox):
     workspace = Workspace(path)
+
+    def log_event(kind: str, **fields):
+        store.log(actor, kind, json.dumps(fields, ensure_ascii=False))
+
+    @tool
+    def run_command(command: Annotated[str, "A bash command or script to run in your container"],
+                    timeout_seconds: Annotated[int, f"Seconds before the command is killed, at most {limits.command_timeout}"] = limits.command_timeout) -> str:
+        """Run a bash command in your own Linux container. The working directory is /repo, which is shared with every other agent. Returns the exit code, stdout and stderr; long output is cut in the middle. The command gets no stdin and is killed when it runs out of time, so do not start servers or interactive programs in the foreground."""
+        timeout = max(1, min(int(timeout_seconds), limits.command_timeout))
+        result = sandbox.run(actor, command, timeout)
+        log_event("command", command=command, exit_code=result.exit_code, timed_out=result.timed_out,
+                  duration=round(result.duration, 2), stdout=result.stdout, stderr=result.stderr)
+        return command_report(result, timeout)
+
+    @tool
+    def write_file(path: Annotated[str, f"File path inside {WORKDIR}, absolute or relative to it"],
+                   content: Annotated[str, "The complete new content of the file"]) -> str:
+        """Create or overwrite a text file in /repo, creating missing directories. Use this instead of shell redirection or heredocs to write files."""
+        try:
+            result = sandbox.write_file(actor, path, content)
+        except PathError as error:
+            log_event("write_file", path=path, error=str(error))
+            return f"Rejected: {error}."
+        size = len(content.encode("utf-8"))
+        log_event("write_file", path=path, bytes=size, exit_code=result.exit_code, stderr=result.stderr)
+        if result.exit_code != 0:
+            return f"Could not write {path} (exit code {result.exit_code}): {result.stderr}"
+        return f"Wrote {size} bytes to {path}."
+
+    @tool
+    def read_file(path: Annotated[str, f"File path inside {WORKDIR}, absolute or relative to it"]) -> str:
+        """Read a text file from /repo. Very long files are cut off; use run_command with sed or grep to look at parts of them."""
+        try:
+            result = sandbox.read_file(actor, path)
+        except PathError as error:
+            log_event("read_file", path=path, error=str(error))
+            return f"Rejected: {error}."
+        log_event("read_file", path=path, exit_code=result.exit_code, stderr=result.stderr)
+        if result.exit_code != 0:
+            return f"Could not read {path} (exit code {result.exit_code}): {result.stderr}"
+        return result.stdout or "(the file is empty)"
     @tool
     def post_chat(content: Annotated[str, "The message to send to the shared village chat"]) -> str:
         """Post a message to the shared village chat. Every other agent sees it at the start of their next turn."""
@@ -70,7 +120,8 @@ def make_tools(actor: str, role: str, path: str, store: Store, limits: Limits):
         store.log(actor, "done_task", f"task {task_id} -> {message}")
         return message
 
-    common_tools = [post_chat, check_balance, read_task, take_task, submit_task, read_submission]
+    common_tools = [run_command, write_file, read_file, post_chat, check_balance,
+                    read_task, take_task, submit_task, read_submission]
     leader_tools = [post_task, done_task]
     if role == "leader":
         return common_tools + leader_tools

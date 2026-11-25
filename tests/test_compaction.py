@@ -6,6 +6,7 @@ from langgraph.checkpoint.sqlite import SqliteSaver
 
 import villager
 from persistence import Limits
+from sandbox import Sandbox
 from store import Store
 from test_resume import ScriptedModel
 
@@ -45,7 +46,7 @@ def test_compaction_keeps_every_replayed_thinking_block_valid(tmp_path):
                             {"type": "text", "text": f"reply {n} " + "words " * 300}]) for n in range(16)]
     model = BindingCheckModel(responses=responses)
     graph = villager.build_villager("alice", "worker", "test goal", model, path, store, Limits(compact_trigger=2500),
-                                    SqliteSaver(sqlite3.connect(path, check_same_thread=False)))
+                                    SqliteSaver(sqlite3.connect(path, check_same_thread=False)), Sandbox("offline-test", "."))
     config = {"configurable": {"thread_id": "alice"}}
     for turn in range(6):
         graph.invoke({"messages": []}, config)
@@ -65,6 +66,18 @@ def test_changed_system_prompt_on_resume_drops_old_thinking(tmp_path):
     config = {"configurable": {"thread_id": "alice"}}
     for goal in ["first goal", "first goal", "second goal", "second goal"]:
         graph = villager.build_villager("alice", "worker", goal, model, path, store, Limits(),
-                                        SqliteSaver(sqlite3.connect(path, check_same_thread=False)))
+                                        SqliteSaver(sqlite3.connect(path, check_same_thread=False)), Sandbox("offline-test", "."))
         graph.invoke({"messages": []}, config)
     assert model.thinking_replayed == 2
+
+
+def test_dropped_thinking_is_logged(tmp_path):
+    path = str(tmp_path / "village.db")
+    store = Store(path)
+    dropped = {"type": "thinking_dropped", "path": "messages.1.content.0", "reason": "prefix_binding_mismatch"}
+    reply = AIMessage("done", response_metadata={"input_transformations": [dropped]})
+    graph = villager.build_villager("alice", "worker", "goal", ScriptedModel(responses=[reply]), path, store, Limits(),
+                                    SqliteSaver(sqlite3.connect(path, check_same_thread=False)), Sandbox("offline-test", "."))
+    graph.invoke({"messages": []}, {"configurable": {"thread_id": "alice"}})
+    events = [e for e in store.read_event() if e.type == "thinking_dropped"]
+    assert len(events) == 1 and json.loads(events[0].content) == [dropped]

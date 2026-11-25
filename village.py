@@ -1,6 +1,7 @@
 from store import Store
 from villager import build_villager
 from persistence import open_run, limits_from
+from sandbox import Sandbox, docker_available
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -12,18 +13,8 @@ import sqlite3
 MODEL_NAME = ["claude", "chatgpt", "deepseek", "gemini"]
 ROLES = {"claude": "leader", "chatgpt": "worker", "deepseek": "worker", "gemini": "worker"}
 
-def run_model():
-    run, args = open_run(sys.argv[1:])
-    limits = limits_from(args)
-    print(f"Run {run.run_id}: {run.directory}", file=sys.stderr)
-    path = run.db_path
-    store = Store(path)
-    checkpointer = SqliteSaver(sqlite3.connect(path, check_same_thread=False))
-    models = make_models()
-    villagers = {name: build_villager(name, ROLES[name], run.goal, models[name], path, store, limits, checkpointer)
-                 for name in MODEL_NAME}
+def run_turns(villagers: dict, store: Store, limits, step: int):
     config = {"recursion_limit": 4 * limits.max_tool_rounds + 10}
-    step = run.step
     end_step = step + limits.rounds * len(MODEL_NAME)
     balance = store.check_balance(limits.input_budget, limits.output_budget)
     failures = 0
@@ -45,6 +36,29 @@ def run_model():
             store.log("village", "stopped", f"{failures} consecutive failed turns")
             print(f"Stopping: {failures} consecutive failed turns", file=sys.stderr)
             break
+
+def run_model():
+    run, args = open_run(sys.argv[1:])
+    limits = limits_from(args)
+    if not docker_available():
+        raise SystemExit("Docker is not available; start Docker Desktop and check that `docker info` works.")
+    print(f"Run {run.run_id}: {run.directory}", file=sys.stderr)
+    path = run.db_path
+    store = Store(path)
+    checkpointer = SqliteSaver(sqlite3.connect(path, check_same_thread=False))
+    models = make_models()
+    sandbox = Sandbox(run.run_id, run.repo_dir, network=not args.offline)
+    try:
+        sandbox.start(MODEL_NAME)
+        store.log("village", "containers", f"started {len(MODEL_NAME)} containers, network {'off' if args.offline else 'on'}")
+        villagers = {name: build_villager(name, ROLES[name], run.goal, models[name], path, store, limits,
+                                          checkpointer, sandbox)
+                     for name in MODEL_NAME}
+        run_turns(villagers, store, limits, run.step)
+    finally:
+        removed = sandbox.close()
+        store.log("village", "containers", f"removed {removed} containers")
+        print(f"Removed {removed} containers. The shared project is in {run.repo_dir}", file=sys.stderr)
 
 if __name__ == "__main__":
     run_model()

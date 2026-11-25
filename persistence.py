@@ -32,6 +32,7 @@ class Limits:
     input_budget: int = 3_000_000
     output_budget: int = 300_000
     compact_trigger: int = 40_000
+    command_timeout: int = 120
 
 def positive_int(value: str) -> int:
     number = int(value.replace("_", ""))
@@ -59,10 +60,15 @@ def make_parser() -> argparse.ArgumentParser:
                         help="output tokens the whole village may spend")
     parser.add_argument("--compact-trigger", type=positive_int, default=defaults.compact_trigger,
                         help="approximate context size in tokens above which a villager's memory is compacted")
+    parser.add_argument("--command-timeout", type=positive_int, default=defaults.command_timeout,
+                        help="longest time in seconds a shell command in a container may run")
+    parser.add_argument("--offline", action="store_true",
+                        help="start the villagers' containers without network access")
     return parser
 
 def limits_from(args: argparse.Namespace) -> Limits:
-    return Limits(args.rounds, args.max_tool_rounds, args.input_budget, args.output_budget, args.compact_trigger)
+    return Limits(args.rounds, args.max_tool_rounds, args.input_budget, args.output_budget,
+                  args.compact_trigger, args.command_timeout)
 
 def find_run(value: str) -> Path | None:
     if not value:

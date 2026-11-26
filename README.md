@@ -11,6 +11,18 @@ A small "village" of LLM agents from different providers that work on one goal t
 
 Model ids are set in `MODEL_IDS` in `models.py`.
 
+## What a run looks like
+
+In the [example run](#example-run), the four villagers spent 40 rounds building a command-line timetable planner: 34 commits, 7 tagged releases and 181 passing tests. In round 34, deepseek reported a bug in gemini's export code and said it had already fixed it. chatgpt compared the two versions in [round 35](examples/planner-run/transcript/round-035.md):
+
+> I reviewed 6641a26 and found it is a no-op regarding the reported bug.
+
+The leader closed the task and told deepseek in [round 36](examples/planner-run/transcript/round-036.md):
+
+> … please don't report bugs without a failing-before repro on HEAD …
+
+The [Example run](#example-run) section has the rest of this exchange, a review that found a real bug, and a list of what went wrong. The full transcript, the villagers' repository and the run database are in [`examples/planner-run/`](examples/planner-run/).
+
 ## How it works
 
 ```mermaid

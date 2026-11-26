@@ -14,33 +14,42 @@ from dataclasses import asdict
 MODEL_NAME = ["claude", "chatgpt", "deepseek", "gemini"]
 ROLES = {"claude": "leader", "chatgpt": "worker", "deepseek": "worker", "gemini": "worker"}
 
-def run_turns(villagers: dict, store: Store, limits, step: int):
+def budget_left(balance: dict) -> bool:
+    return balance["remaining_input_tokens"] > 0 and balance["remaining_output_tokens"] > 0
+
+def end_session(store: Store, reason: str, turns: int, failed: int) -> dict:
+    outcome = {"reason": reason, "turns": turns, "ok": turns - failed, "failed": failed}
+    store.log("village", "session_end", json.dumps(outcome))
+    return outcome
+
+def run_turns(villagers: dict, store: Store, limits, step: int) -> dict:
     config = {"recursion_limit": 4 * limits.max_tool_rounds + 10}
     end_step = step + limits.rounds * len(MODEL_NAME)
-    balance = store.check_balance(limits.input_budget, limits.output_budget)
-    failures = 0
-    while (step < end_step and balance["remaining_input_tokens"] > 0
-            and balance["remaining_output_tokens"] > 0):
+    turns = failed = failures = 0
+    while step < end_step:
+        if not budget_left(store.check_balance(limits.input_budget, limits.output_budget)):
+            return end_session(store, "budget_exhausted", turns, failed)
         name = MODEL_NAME[step % len(MODEL_NAME)]
         turn = {"step": step, "round": step // len(MODEL_NAME) + 1}
         print(f"round {turn['round']}: {name}", file=sys.stderr)
         store.log(name, "turn_start", json.dumps(turn))
+        turns += 1
         try:
             villagers[name].invoke({"messages": []}, {**config, "configurable": {"thread_id": name}})
             failures = 0
             store.log(name, "turn_end", json.dumps({**turn, "status": "ok"}))
         except Exception as error:
             failures += 1
+            failed += 1
             store.log(name, "turn_error", f"{type(error).__name__}: {error}")
             store.log(name, "turn_end", json.dumps({**turn, "status": "error"}))
             print(f"{name}: turn failed ({type(error).__name__}: {error})", file=sys.stderr)
-        balance = store.check_balance(limits.input_budget, limits.output_budget)
         step += 1
         store.update_step()
         if failures >= len(MODEL_NAME):
-            store.log("village", "stopped", f"{failures} consecutive failed turns")
             print(f"Stopping: {failures} consecutive failed turns", file=sys.stderr)
-            break
+            return end_session(store, "consecutive_failures", turns, failed)
+    return end_session(store, "rounds_done", turns, failed)
 
 def run_model():
     run, args = open_run(sys.argv[1:])
@@ -59,16 +68,29 @@ def run_model():
     models = make_models()
     sandbox = Sandbox(run.run_id, run.repo_dir, network=run.network)
     try:
-        sandbox.start(MODEL_NAME)
-        store.log("village", "containers", f"started {len(MODEL_NAME)} containers, network {'on' if run.network else 'off'}")
-        villagers = {name: build_villager(name, ROLES[name], run.goal, models[name], path, store, limits,
-                                          checkpointer, sandbox)
-                     for name in MODEL_NAME}
-        run_turns(villagers, store, limits, run.step)
+        if budget_left(store.check_balance(limits.input_budget, limits.output_budget)):
+            sandbox.start(MODEL_NAME)
+            store.log("village", "containers", f"started {len(MODEL_NAME)} containers, network {'on' if run.network else 'off'}")
+            villagers = {name: build_villager(name, ROLES[name], run.goal, models[name], path, store, limits,
+                                              checkpointer, sandbox)
+                         for name in MODEL_NAME}
+            outcome = run_turns(villagers, store, limits, run.step)
+        else:
+            outcome = end_session(store, "budget_exhausted", 0, 0)
     finally:
         removed = sandbox.close()
         store.log("village", "containers", f"removed {removed} containers")
         print(f"Removed {removed} containers. The shared project is in {run.repo_dir}", file=sys.stderr)
+    if outcome["reason"] == "consecutive_failures":
+        raise SystemExit(f"Run {run.run_id} stopped because {len(MODEL_NAME)} turns in a row failed "
+                         f"({outcome['failed']} of {outcome['turns']} turns failed in this invocation).")
+    if outcome["turns"] == 0:
+        balance = store.check_balance(limits.input_budget, limits.output_budget)
+        spent_input = limits.input_budget - balance["remaining_input_tokens"]
+        spent_output = limits.output_budget - balance["remaining_output_tokens"]
+        raise SystemExit(f"Run {run.run_id} has no budget left, so no turn was run: {spent_input:,} of "
+                         f"{limits.input_budget:,} input tokens and {spent_output:,} of {limits.output_budget:,} "
+                         "output tokens are spent. Resume with a larger --input-budget or --output-budget.")
 
 if __name__ == "__main__":
     run_model()

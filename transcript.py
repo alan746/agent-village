@@ -14,7 +14,10 @@ COMMAND_LIMIT = 1500
 COLLAPSE_LINES = 12
 OWN_EVENT_TOOLS = {"run_command", "write_file", "read_file", "post_chat", "post_task", "take_task",
                    "submit_task", "done_task"}
-VILLAGE_EVENTS = {"run_config", "containers", "stopped"}
+VILLAGE_EVENTS = {"run_config", "containers", "stopped", "session_end"}
+STOP_REASONS = {"rounds_done": "the requested rounds were done",
+                "budget_exhausted": "the token budget ran out",
+                "consecutive_failures": "too many consecutive turns failed"}
 QUIET_EVENTS = {"spend", "wake", "turn_start", "turn_end"}
 
 @dataclass
@@ -245,7 +248,20 @@ def render_village_event(event: Event) -> str:
         return f"---\n\n**{mode}** at round {data.get('round')} (step {data.get('step')}), {stamp(event.ts, True)}"
     if event.type == "stopped":
         return f"**[STOPPED]** {event.content}"
+    if event.type == "session_end":
+        counts = f"{data.get('turns')} turns, {data.get('ok')} succeeded, {data.get('failed')} failed"
+        if data.get("reason") == "rounds_done":
+            return f"**Session ended:** {stop_reason(event)} ({counts})"
+        return f"**[STOPPED]** {stop_reason(event)} ({counts})"
     return f"*{event.content}*"
+
+def stop_reason(event: Event | None) -> str:
+    if event is None:
+        return "not recorded"
+    if event.type == "stopped":
+        return event.content
+    reason = (event.data() or {}).get("reason")
+    return STOP_REASONS.get(reason, f"unknown reason {reason!r}")
 
 def summary_table(turns: list[Turn], totals: dict[str, Usage], events: list[Event], actors: list[str]) -> str:
     commands, failures = {}, {}
@@ -289,14 +305,32 @@ def limits_table(configs: list[Event]) -> str:
                     f"| {limits.get('command_timeout')} s | {'on' if data.get('network') else 'off'} |")
     return "\n".join([header, *rows])
 
-def completed_rounds(turns: list[Turn], marked: bool, size: int) -> int:
-    if not marked:
-        return len(turns) // max(size, 1)
-    finished = {turn.step for turn in turns if turn.status is not None and turn.step is not None}
-    rounds = 0
-    while all(step in finished for step in range(rounds * size, (rounds + 1) * size)):
-        rounds += 1
-    return rounds
+def turn_counts(events: list[Event]) -> tuple[int, int, int]:
+    statuses = [(event.data() or {}).get("status") for event in events if event.type == "turn_end"]
+    return sum(event.type == "turn_start" for event in events), statuses.count("ok"), statuses.count("error")
+
+def round_counts(turns: list[Turn], size: int) -> tuple[int, int]:
+    succeeded = {turn.step for turn in turns if turn.status == "ok" and turn.step is not None}
+    started = {turn.step // size for turn in turns if turn.step is not None}
+    full = sum(all(step in succeeded for step in range(index * size, (index + 1) * size)) for index in started)
+    return full, len(started)
+
+def sessions_table(events: list[Event]) -> str:
+    header = ("| Session | Started at | Turns attempted | Succeeded | Failed | Stopped because |\n"
+              "|---|---|---:|---:|---:|---|")
+    sessions = []
+    for event in events:
+        if event.type == "run_config":
+            sessions.append((event.data() or {}, []))
+        elif sessions:
+            sessions[-1][1].append(event)
+    rows = []
+    for config, session_events in sessions:
+        attempted, ok, failed_turns = turn_counts(session_events)
+        end = next((e for e in session_events if e.type in ("session_end", "stopped")), None)
+        rows.append(f"| {config.get('mode')} | round {config.get('round')} | {attempted} | {ok} | {failed_turns} "
+                    f"| {stop_reason(end)} |")
+    return "\n".join([header, *rows])
 
 @dataclass
 class Run:
@@ -325,12 +359,22 @@ def collect(run_dir: Path) -> Run:
     size = len(models) or len(dict.fromkeys(t.actor for t in turns)) or 1
     return Run(run_dir.name, goal, events, timeline, turns, totals, configs, models, roles, actors, size, marked)
 
+def progress(run: Run) -> str:
+    if not run.marked:
+        return (f"**Full rounds, inferred from the order of turns:** {len(run.turns) // max(run.size, 1)}  \n"
+                f"**Turns:** {len(run.turns)}, success not recorded")
+    full, started = round_counts(run.turns, run.size)
+    attempted, ok, failed_turns = turn_counts(run.events)
+    turns = f"**Turns:** {attempted} attempted, {ok} succeeded, {failed_turns} failed"
+    if attempted > ok + failed_turns:
+        turns += f", {attempted - ok - failed_turns} with no recorded end"
+    return f"**Rounds in which every turn succeeded:** {full} of {started} started  \n{turns}"
+
 def header(run: Run) -> list[str]:
     out = [f"# Village transcript: run {run.name}", f"**Goal:** {run.goal}"]
     if run.events:
         out.append(f"**Started:** {stamp(run.events[0].ts, True)}  \n**Ended:** {stamp(run.events[-1].ts, True)}  \n"
-                   f"**Rounds completed:** {completed_rounds(run.turns, run.marked, run.size)}  \n"
-                   f"**Turns:** {len(run.turns)}")
+                   + progress(run))
     if not run.marked:
         out.append("> This run was recorded before turn and configuration events existed, so rounds are inferred "
                    "from the order of turns and models and limits are not known.")
@@ -340,6 +384,9 @@ def header(run: Run) -> list[str]:
             f"| {actor} | {run.roles.get(actor, '')} | `{model}` |" for actor, model in run.models.items()))
     if run.configs:
         out.append("## Limits\n\n" + limits_table(run.configs))
+        out.append("## Sessions\n\n" + sessions_table(run.events) +
+                   "\n\nA session is one call to `village.py`. \"not recorded\" means the session was killed or "
+                   "ran before stop reasons were logged.")
     out.append("## Tokens and commands\n\n" + summary_table(run.turns, run.totals, run.events, run.actors) +
                "\n\nInput tokens count every prompt token, cached or not; model calls include the calls that "
                "summarize a villager's memory during compaction.")

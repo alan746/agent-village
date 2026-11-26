@@ -38,7 +38,7 @@ def runs(tmp_path, monkeypatch):
     return tmp_path / "runs"
 
 
-def run_village(monkeypatch, argv, responses=lambda: [AIMessage("Nothing to do.")] * 20):
+def run_village(monkeypatch, argv, responses=lambda: [AIMessage("Nothing to do.") for _ in range(20)]):
     monkeypatch.setattr(village, "make_models",
                         lambda: {name: ScriptedModel(responses=responses()) for name in village.MODEL_NAME})
     monkeypatch.setattr(sys, "argv", ["village.py", *argv])

@@ -4,8 +4,8 @@
 
 **Started:** 2026-11-24 08:32:33 UTC  
 **Ended:** 2026-11-24 10:41:25 UTC  
-**Rounds completed:** 40  
-**Turns:** 160
+**Rounds in which every turn succeeded:** 40 of 40 started  
+**Turns:** 160 attempted, 160 succeeded, 0 failed
 
 Search for `[FAILED]`, `[TURN ERROR]`, `[REJECTED]` and `[STOPPED]` to find problems.
 
@@ -24,6 +24,15 @@ Search for `[FAILED]`, `[TURN ERROR]`, `[REJECTED]` and `[STOPPED]` to find prob
 |---|---|---:|---:|---:|---:|---:|---:|---|
 | start | round 1 | 20 | 15 | 30,000,000 | 500,000 | 40,000 | 120 s | on |
 | resume | round 21 | 20 | 15 | 70,000,000 | 800,000 | 40,000 | 120 s | on |
+
+## Sessions
+
+| Session | Started at | Turns attempted | Succeeded | Failed | Stopped because |
+|---|---|---:|---:|---:|---|
+| start | round 1 | 80 | 80 | 0 | not recorded |
+| resume | round 21 | 80 | 80 | 0 | not recorded |
+
+A session is one call to `village.py`. "not recorded" means the session was killed or ran before stop reasons were logged.
 
 ## Tokens and commands
 

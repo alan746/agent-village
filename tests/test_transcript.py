@@ -61,7 +61,9 @@ def test_transcript_of_a_scripted_run(tmp_path, monkeypatch):
     assert -1 not in positions, [s for s, p in zip(order, positions) if p == -1]
     assert positions == sorted(positions)
     assert text.count("python mean.py") == 1
-    assert "Rounds completed:** 1" in text
+    assert "**Rounds in which every turn succeeded:** 1 of 1 started" in text
+    assert "**Turns:** 4 attempted, 4 succeeded, 0 failed" in text
+    assert "| start | round 1 | 4 | 4 | 0 | the requested rounds were done |" in text
 
     files = transcript.render_split(run_dir)
     assert sorted(files) == ["README.md", "round-001.md"]

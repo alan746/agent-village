@@ -105,6 +105,8 @@ The budgets apply to the whole run, across resumes. Each call to `village.py` ru
 
 On `--resume`, the run keeps its settings. Every option except `--rounds` takes the value from the last time the run was started or resumed, unless you give it again: `python village.py --resume --input-budget 70_000_000` raises the input budget and leaves the rest as they were. `--rounds` always means rounds in this invocation and falls back to 10. The network setting is fixed when the run is created: resuming a run that has network access with `--offline` is an error, and a run started with `--offline` stays offline (giving `--offline` again is allowed). A run recorded before settings were stored resumes with the defaults above, and with network access unless `--offline` is given.
 
+Each call to `village.py` ends by logging why it stopped: the requested rounds were done, the token budget ran out, or four turns in a row failed (for example because the API could not be reached). The exit status is 0 when the rounds were done or the budget ran out after at least one turn. It is non-zero when four turns in a row failed, and when the budget was already used up at the start so that no turn ran; in that case the message says how much of each budget is spent, and `--resume` with a larger `--input-budget` or `--output-budget` continues the run. The containers are removed in every case.
+
 ## Output
 
 Each run gets its own directory:
@@ -127,7 +129,7 @@ python transcript.py --split            # a directory: runs/<run_id>/transcript/
 python transcript.py --split --output examples/my-run/transcript
 ```
 
-The transcript lists the villagers, the limits and a token and command table per villager. After that comes every round and turn in order, showing what was said, posted, run and written. Failed commands are marked `[FAILED]` and failed turns `[TURN ERROR]`.
+The transcript starts with the number of rounds in which every villager's turn succeeded, out of the rounds started, and the number of turns attempted, succeeded and failed. It then lists the villagers, the limits, the sessions (one per call to `village.py`, with their turn counts and why each one stopped) and a token and command table per villager. A session killed from outside, or run before stop reasons were logged, shows "not recorded". After that comes every round and turn in order, showing what was said, posted, run and written. Failed commands are marked `[FAILED]`, failed turns `[TURN ERROR]`, and a session that stopped early because of the budget or failed turns `[STOPPED]`.
 
 A long run makes a single file too large for GitHub to render, so use `--split` for those. The index `README.md` holds the header and a table of rounds that links to `round-001.md`, `round-002.md` and so on. `--output` sets where the file or directory is written. A split export replaces any `round-*.md` files already in that directory.
 

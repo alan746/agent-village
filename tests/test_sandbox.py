@@ -168,12 +168,15 @@ def test_village_removes_containers_on_interrupt_and_errors(tmp_path, monkeypatc
     monkeypatch.setattr(village, "make_models",
                         lambda: {name: InterruptingModel(responses=[], error=RuntimeError) for name in names})
     monkeypatch.setattr(sys, "argv", ["village.py", "--resume", run_dir.name, "--offline", "--rounds", "2"])
-    village.run_model()
+    with pytest.raises(SystemExit) as info:
+        village.run_model()
+    assert info.value.code not in (0, None)
     assert containers(run_dir.name) == []
     store = Store(str(run_dir / "village.db"))
     kinds = [e.type for e in store.read_event()]
     assert kinds.count("turn_error") == len(names)
-    assert "stopped" in kinds
+    stops = [json.loads(e.content) for e in store.read_event() if e.type == "session_end"]
+    assert [stop["reason"] for stop in stops] == ["consecutive_failures"]
     configs = [json.loads(e.content) for e in store.read_event() if e.type == "run_config"]
     assert [c["mode"] for c in configs] == ["start", "resume"]
     assert configs[1]["limits"]["rounds"] == 2 and configs[1]["models"]["claude"]

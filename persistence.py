@@ -2,6 +2,7 @@ import argparse
 import time
 from dataclasses import dataclass
 from pathlib import Path
+from langgraph.checkpoint.sqlite import SqliteSaver
 from store import Store
 
 GOAL = ("Together, build and maintain an open-source tool that is useful to "
@@ -24,6 +25,15 @@ class Run:
     @property
     def repo_dir(self) -> Path:
         return self.directory / REPO_NAME
+
+class LatestCheckpointSaver(SqliteSaver):
+    def put(self, config, checkpoint, metadata, new_versions):
+        saved = super().put(config, checkpoint, metadata, new_versions)
+        key = (str(saved["configurable"]["thread_id"]), saved["configurable"]["checkpoint_ns"], checkpoint["id"])
+        with self.cursor() as cur:
+            for table in ("checkpoints", "writes"):
+                cur.execute(f"DELETE FROM {table} WHERE thread_id = ? AND checkpoint_ns = ? AND checkpoint_id < ?", key)
+        return saved
 
 @dataclass
 class Limits:

@@ -114,6 +114,8 @@ runs/<run_id>/
     transcript.md    written by transcript.py
 ```
 
+The database keeps only the latest graph checkpoint of each villager, which is all `--resume` needs. The full history of a run is the event log, which `transcript.py` exports.
+
 To export a run as Markdown, run the following:
 
 ```bash

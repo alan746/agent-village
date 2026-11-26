@@ -4,9 +4,8 @@ import pytest
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import AIMessage
 from langchain_core.outputs import ChatGeneration, ChatResult
-from langgraph.checkpoint.sqlite import SqliteSaver
 
-from persistence import Limits
+from persistence import LatestCheckpointSaver, Limits
 from sandbox import Sandbox
 from store import Store
 from villager import build_villager
@@ -44,7 +43,7 @@ class ScriptedModel(BaseChatModel):
 
 
 def make_villager(path, store, model):
-    checkpointer = SqliteSaver(sqlite3.connect(path, check_same_thread=False))
+    checkpointer = LatestCheckpointSaver(sqlite3.connect(path, check_same_thread=False))
     return build_villager("alice", "worker", "test goal", model, path, store, Limits(), checkpointer,
                           Sandbox("offline-test", "."))
 
@@ -63,6 +62,9 @@ def test_resume_after_crash_between_thinking_and_act(tmp_path, monkeypatch):
     with pytest.raises(KeyboardInterrupt):
         make_villager(path, store, first).invoke({"messages": []}, config)
     monkeypatch.undo()
+    conn = sqlite3.connect(path)
+    assert conn.execute("SELECT COUNT(*) FROM checkpoints WHERE thread_id = 'alice'").fetchone()[0] == 1
+    conn.close()
 
     resumed_store = Store(path)
     second = ScriptedModel(responses=[AIMessage("Nothing to do.")])

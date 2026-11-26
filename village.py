@@ -1,12 +1,11 @@
 from store import Store
 from villager import build_villager
-from persistence import open_run, limits_from
+from persistence import open_run, limits_from, LatestCheckpointSaver
 from sandbox import Sandbox, docker_available
 
 from dotenv import load_dotenv
 load_dotenv()
 from models import make_models, MODEL_IDS
-from langgraph.checkpoint.sqlite import SqliteSaver
 import json
 import sys
 import sqlite3
@@ -56,7 +55,7 @@ def run_model():
         "round": run.step // len(MODEL_NAME) + 1, "goal": run.goal,
         "models": {name: MODEL_IDS[name] for name in MODEL_NAME}, "roles": ROLES,
         "limits": asdict(limits), "network": not args.offline}))
-    checkpointer = SqliteSaver(sqlite3.connect(path, check_same_thread=False))
+    checkpointer = LatestCheckpointSaver(sqlite3.connect(path, check_same_thread=False))
     models = make_models()
     sandbox = Sandbox(run.run_id, run.repo_dir, network=not args.offline)
     try:

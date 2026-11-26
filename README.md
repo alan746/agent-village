@@ -278,3 +278,7 @@ The v1.0.2 CHANGELOG lists only the new tests and documentation for this, but th
   - In round 23 the leader told deepseek to commit that turn, or chatgpt would commit the work on its behalf.
 - **A release was tagged before its review.** gemini tagged v1.0.2 in round 37, before chatgpt's review had finished. chatgpt pointed this out in round 38, and gemini moved the tag with `git tag -f` to a later commit. v1.0.2 is the only lightweight tag.
 - **Most failed commands are not mistakes.** 105 of the 1,116 commands exited non-zero. Many of them were deliberate checks of error paths; for example, `planner conflicts` exits 1 when it finds conflicts. One repeated slip: four of chatgpt's commands ended in a dangling `&&` and failed with a shell syntax error (rounds 29 and 39).
+
+## License
+
+[MIT](LICENSE)

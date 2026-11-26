@@ -1,6 +1,7 @@
 import argparse
+import json
 import time
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from pathlib import Path
 from langgraph.checkpoint.sqlite import SqliteSaver
 from store import Store
@@ -12,11 +13,22 @@ DB_NAME = "village.db"
 REPO_NAME = "repo"
 
 @dataclass
+class Limits:
+    rounds: int = 10
+    max_tool_rounds: int = 15
+    input_budget: int = 3_000_000
+    output_budget: int = 300_000
+    compact_trigger: int = 40_000
+    command_timeout: int = 120
+
+@dataclass
 class Run:
     run_id: str
     directory: Path
     goal: str
     step: int
+    limits: Limits
+    network: bool
 
     @property
     def db_path(self) -> str:
@@ -35,25 +47,28 @@ class LatestCheckpointSaver(SqliteSaver):
                 cur.execute(f"DELETE FROM {table} WHERE thread_id = ? AND checkpoint_ns = ? AND checkpoint_id < ?", key)
         return saved
 
-@dataclass
-class Limits:
-    rounds: int = 10
-    max_tool_rounds: int = 15
-    input_budget: int = 3_000_000
-    output_budget: int = 300_000
-    compact_trigger: int = 40_000
-    command_timeout: int = 120
-
 def positive_int(value: str) -> int:
     number = int(value.replace("_", ""))
     if number < 1:
         raise argparse.ArgumentTypeError(f"{value} is not a positive integer")
     return number
 
+SAVED_LIMITS = {
+    "max_tool_rounds": "model calls with tool use a villager may make in one turn",
+    "input_budget": "input tokens the whole village may spend, cached tokens included",
+    "output_budget": "output tokens the whole village may spend",
+    "compact_trigger": "approximate context size in tokens above which a villager's memory is compacted",
+    "command_timeout": "longest time in seconds a shell command in a container may run",
+}
+
 def make_parser() -> argparse.ArgumentParser:
     defaults = Limits()
     parser = argparse.ArgumentParser(prog="village.py", description="Run a village of LLM agents.",
-                                     formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+                                     formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+                                     epilog="The defaults shown are for a new run. On --resume, the run's earlier "
+                                            "limits are kept unless given again, --rounds counts only this "
+                                            "invocation, and the network setting cannot change after a run "
+                                            "has started.")
     mode = parser.add_mutually_exclusive_group(required=True)
     mode.add_argument("--goal", nargs="*", metavar="WORD",
                       help="start a new run with this goal; without words the default goal is used")
@@ -62,23 +77,30 @@ def make_parser() -> argparse.ArgumentParser:
                            "without a value the latest run is used")
     parser.add_argument("--rounds", type=positive_int, default=defaults.rounds,
                         help="rounds to run in this invocation; in one round every villager takes one turn")
-    parser.add_argument("--max-tool-rounds", type=positive_int, default=defaults.max_tool_rounds,
-                        help="model calls with tool use a villager may make in one turn")
-    parser.add_argument("--input-budget", type=positive_int, default=defaults.input_budget,
-                        help="input tokens the whole village may spend, cached tokens included")
-    parser.add_argument("--output-budget", type=positive_int, default=defaults.output_budget,
-                        help="output tokens the whole village may spend")
-    parser.add_argument("--compact-trigger", type=positive_int, default=defaults.compact_trigger,
-                        help="approximate context size in tokens above which a villager's memory is compacted")
-    parser.add_argument("--command-timeout", type=positive_int, default=defaults.command_timeout,
-                        help="longest time in seconds a shell command in a container may run")
+    for name, text in SAVED_LIMITS.items():
+        parser.add_argument(f"--{name.replace('_', '-')}", type=positive_int, default=argparse.SUPPRESS,
+                            help=f"{text} (default: {getattr(defaults, name)}; on --resume the run's earlier value)")
     parser.add_argument("--offline", action="store_true",
-                        help="start the villagers' containers without network access")
+                        help="start the villagers' containers without network access; "
+                             "fixed when the run is created")
     return parser
 
-def limits_from(args: argparse.Namespace) -> Limits:
-    return Limits(args.rounds, args.max_tool_rounds, args.input_budget, args.output_budget,
-                  args.compact_trigger, args.command_timeout)
+def limits_from(args: argparse.Namespace, saved: dict | None = None) -> Limits:
+    values = asdict(Limits())
+    if isinstance(saved, dict):
+        values.update({name: value for name, value in saved.items()
+                       if name in SAVED_LIMITS and isinstance(value, int) and value > 0})
+    values.update({name: getattr(args, name) for name in SAVED_LIMITS if hasattr(args, name)})
+    values["rounds"] = args.rounds
+    return Limits(**values)
+
+def saved_config(store: Store) -> dict:
+    content = store.last_event("run_config")
+    try:
+        data = json.loads(content) if content else {}
+    except ValueError:
+        data = {}
+    return data if isinstance(data, dict) else {}
 
 def find_run(value: str) -> Path | None:
     if not value:
@@ -101,12 +123,21 @@ def open_run(argv: list[str]) -> tuple[Run, argparse.Namespace]:
         if directory.exists():
             parser.error(f"run directory {directory} already exists")
         (directory / REPO_NAME).mkdir(parents=True)
-        run = Run(run_id, directory, " ".join(args.goal) or GOAL, 0)
+        run = Run(run_id, directory, " ".join(args.goal) or GOAL, 0, limits_from(args), not args.offline)
         Store(run.db_path).set_goal(run.goal)
         return run, args
     directory = find_run(args.resume)
     if directory is None:
         parser.error(f"no run found for {args.resume!r}" if args.resume else "there is no run to resume in runs/")
     (directory / REPO_NAME).mkdir(exist_ok=True)
-    run_state = Store(str(directory / DB_NAME)).read_run_state()
-    return Run(directory.name, directory, run_state["goal"], run_state["step"]), args
+    store = Store(str(directory / DB_NAME))
+    run_state = store.read_run_state()
+    saved = saved_config(store)
+    network = saved.get("network")
+    if not isinstance(network, bool):
+        network = not args.offline
+    elif network and args.offline:
+        parser.error(f"run {directory.name} was started with network access, and the network setting cannot "
+                     "change after a run has started; resume it without --offline")
+    return Run(directory.name, directory, run_state["goal"], run_state["step"],
+               limits_from(args, saved.get("limits")), network), args

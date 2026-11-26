@@ -110,6 +110,12 @@ class Store():
             events.append(Event(*row))
         return events
 
+    def last_event(self, type: str) -> str | None:
+        with self._lock:
+            row = self._conn.execute("SELECT content FROM event WHERE type = ? ORDER BY id DESC LIMIT 1",
+                                     (type,)).fetchone()
+        return row[0] if row else None
+
     def read_run_state(self) -> dict:
         result = {}
         with self._lock:

@@ -1,6 +1,6 @@
 from store import Store
 from villager import build_villager
-from persistence import open_run, limits_from, LatestCheckpointSaver
+from persistence import open_run, LatestCheckpointSaver
 from sandbox import Sandbox, docker_available
 
 from dotenv import load_dotenv
@@ -44,7 +44,7 @@ def run_turns(villagers: dict, store: Store, limits, step: int):
 
 def run_model():
     run, args = open_run(sys.argv[1:])
-    limits = limits_from(args)
+    limits = run.limits
     if not docker_available():
         raise SystemExit("Docker is not available; start Docker Desktop and check that `docker info` works.")
     print(f"Run {run.run_id}: {run.directory}", file=sys.stderr)
@@ -54,13 +54,13 @@ def run_model():
         "mode": "start" if args.goal is not None else "resume", "step": run.step,
         "round": run.step // len(MODEL_NAME) + 1, "goal": run.goal,
         "models": {name: MODEL_IDS[name] for name in MODEL_NAME}, "roles": ROLES,
-        "limits": asdict(limits), "network": not args.offline}))
+        "limits": asdict(limits), "network": run.network}))
     checkpointer = LatestCheckpointSaver(sqlite3.connect(path, check_same_thread=False))
     models = make_models()
-    sandbox = Sandbox(run.run_id, run.repo_dir, network=not args.offline)
+    sandbox = Sandbox(run.run_id, run.repo_dir, network=run.network)
     try:
         sandbox.start(MODEL_NAME)
-        store.log("village", "containers", f"started {len(MODEL_NAME)} containers, network {'off' if args.offline else 'on'}")
+        store.log("village", "containers", f"started {len(MODEL_NAME)} containers, network {'on' if run.network else 'off'}")
         villagers = {name: build_villager(name, ROLES[name], run.goal, models[name], path, store, limits,
                                           checkpointer, sandbox)
                      for name in MODEL_NAME}

@@ -7,7 +7,7 @@ import pytest
 
 import persistence
 import village
-from persistence import limits_from, open_run
+from persistence import open_run
 from sandbox import Capture, PathError, Sandbox, docker_available, repo_path
 from store import Store
 from test_resume import ScriptedModel
@@ -33,11 +33,11 @@ def events(store, kind):
 @pytest.fixture
 def village_env(tmp_path, monkeypatch):
     monkeypatch.setattr(persistence, "RUNS_DIR", tmp_path / "runs")
-    run, args = open_run(["--goal", "acceptance", "test", "--command-timeout", "20"])
+    run, _ = open_run(["--goal", "acceptance", "test", "--command-timeout", "20"])
     store = Store(run.db_path)
     sandbox = Sandbox(run.run_id, run.repo_dir, network=False)
     sandbox.start(["alice", "bob"])
-    tools = {actor: {t.name: t for t in make_tools(actor, "worker", run.db_path, store, limits_from(args), sandbox)}
+    tools = {actor: {t.name: t for t in make_tools(actor, "worker", run.db_path, store, run.limits, sandbox)}
              for actor in ("alice", "bob")}
     try:
         yield run, store, sandbox, tools

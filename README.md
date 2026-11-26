@@ -91,7 +91,7 @@ python village.py --resume                        # continue the latest run
 python village.py --resume 20261124_024029        # continue a given run (id, run directory or village.db path)
 ```
 
-| Option | Default | Meaning |
+| Option | Default for a new run | Meaning |
 |---|---|---|
 | `--rounds` | 10 | Rounds to run in this invocation; in one round every villager takes one turn |
 | `--max-tool-rounds` | 15 | Model calls with tool use a villager may make in one turn |
@@ -102,6 +102,8 @@ python village.py --resume 20261124_024029        # continue a given run (id, ru
 | `--offline` | off | Start the containers without network access |
 
 The budgets apply to the whole run, across resumes. Each call to `village.py` runs `--rounds` more rounds.
+
+On `--resume`, the run keeps its settings. Every option except `--rounds` takes the value from the last time the run was started or resumed, unless you give it again: `python village.py --resume --input-budget 70_000_000` raises the input budget and leaves the rest as they were. `--rounds` always means rounds in this invocation and falls back to 10. The network setting is fixed when the run is created: resuming a run that has network access with `--offline` is an error, and a run started with `--offline` stays offline (giving `--offline` again is allowed). A run recorded before settings were stored resumes with the defaults above, and with network access unless `--offline` is given.
 
 ## Output
 

@@ -1,6 +1,6 @@
 from store import Store
 from villager import build_villager
-from persistence import open_run, LatestCheckpointSaver
+from persistence import open_run, LatestCheckpointSaver, RunLock
 from sandbox import Sandbox, docker_available
 
 from dotenv import load_dotenv
@@ -53,6 +53,16 @@ def run_turns(villagers: dict, store: Store, limits, step: int) -> dict:
 
 def run_model():
     run, args = open_run(sys.argv[1:])
+    lock = RunLock(run.directory)
+    if not lock.acquire():
+        raise SystemExit(f"Run {run.run_id} is already in use by another village.py process ({lock.path} is "
+                         "locked); wait for that process to end before resuming this run.")
+    try:
+        run_session(run, args.goal is not None)
+    finally:
+        lock.release()
+
+def run_session(run, new: bool):
     limits = run.limits
     if not docker_available():
         raise SystemExit("Docker is not available; start Docker Desktop and check that `docker info` works.")
@@ -60,7 +70,7 @@ def run_model():
     path = run.db_path
     store = Store(path)
     store.log("village", "run_config", json.dumps({
-        "mode": "start" if args.goal is not None else "resume", "step": run.step,
+        "mode": "start" if new else "resume", "step": run.step,
         "round": run.step // len(MODEL_NAME) + 1, "goal": run.goal,
         "models": {name: MODEL_IDS[name] for name in MODEL_NAME}, "roles": ROLES,
         "limits": asdict(limits), "network": run.network}))

@@ -107,6 +107,8 @@ On `--resume`, the run keeps its settings. Every option except `--rounds` takes 
 
 Each call to `village.py` ends by logging why it stopped: the requested rounds were done, the token budget ran out, or four turns in a row failed (for example because the API could not be reached). The exit status is 0 when the rounds were done or the budget ran out after at least one turn. It is non-zero when four turns in a row failed, and when the budget was already used up at the start so that no turn ran; in that case the message says how much of each budget is spent, and `--resume` with a larger `--input-budget` or `--output-budget` continues the run. The containers are removed in every case.
 
+Only one `village.py` process can work on a run at a time. Each process holds an operating-system lock on `runs/<run_id>/village.lock` while it runs, taken before it touches containers. A second process started on the same run exits with an error that names the run, and leaves the first one's containers alone. The operating system releases the lock when the process ends, even if it is killed or crashes, so there is never a stale lock to delete.
+
 ## Output
 
 Each run gets its own directory:
@@ -114,6 +116,7 @@ Each run gets its own directory:
 ```
 runs/<run_id>/
     village.db       chat, task board, token budget, event log, graph checkpoints
+    village.lock     locked by the village.py process working on the run
     repo/            the shared /repo: what the villagers built
     transcript.md    written by transcript.py
 ```

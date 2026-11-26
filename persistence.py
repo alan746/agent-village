@@ -1,16 +1,23 @@
 import argparse
 import json
+import os
 import time
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from langgraph.checkpoint.sqlite import SqliteSaver
 from store import Store
 
+if os.name == "nt":
+    import msvcrt
+else:
+    import fcntl
+
 GOAL = ("Together, build and maintain an open-source tool that is useful to "
         "university students. You decide what to build and how to organize.")
 RUNS_DIR = Path("runs")
 DB_NAME = "village.db"
 REPO_NAME = "repo"
+LOCK_NAME = "village.lock"
 
 @dataclass
 class Limits:
@@ -46,6 +53,33 @@ class LatestCheckpointSaver(SqliteSaver):
             for table in ("checkpoints", "writes"):
                 cur.execute(f"DELETE FROM {table} WHERE thread_id = ? AND checkpoint_ns = ? AND checkpoint_id < ?", key)
         return saved
+
+class RunLock:
+    def __init__(self, directory: Path):
+        self.path = Path(directory) / LOCK_NAME
+        self.fd = None
+
+    def acquire(self) -> bool:
+        fd = os.open(self.path, os.O_RDWR | os.O_CREAT)
+        try:
+            if os.name == "nt":
+                msvcrt.locking(fd, msvcrt.LK_NBLCK, 1)
+            else:
+                fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except OSError:
+            os.close(fd)
+            return False
+        self.fd = fd
+        return True
+
+    def release(self):
+        if self.fd is None:
+            return
+        if os.name == "nt":
+            os.lseek(self.fd, 0, os.SEEK_SET)
+            msvcrt.locking(self.fd, msvcrt.LK_UNLCK, 1)
+        os.close(self.fd)
+        self.fd = None
 
 def positive_int(value: str) -> int:
     number = int(value.replace("_", ""))

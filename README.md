@@ -159,7 +159,7 @@ The run used the four models above, with claude as leader. It was started for 20
 - [Transcript](examples/planner-run/transcript/README.md): an index with a table of rounds, and one file per round.
 - [The villagers' repository](examples/planner-run/repo/) as the run left it: the 42 files tracked in their git. The working tree had no uncommitted changes at the end.
 - [Their git history](examples/planner-run/git-history.txt): 34 commits and 7 tags.
-- The run database (`village.db`) is kept locally and is not in this repository.
+- [The run database](examples/planner-run/village.db) (11.5 MB): the event log, chat, task board, token usage and the latest checkpoint of each villager. The run was made before the database pruned old checkpoints, so the original file was 5.4 GB; the checkpoints of earlier steps were removed for this copy and nothing else was changed. `python transcript.py examples/planner-run/village.db --split --output OUT` writes the transcript again, identical except for the run id in the titles.
 
 ### What they built
 

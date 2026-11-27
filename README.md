@@ -1,6 +1,8 @@
 # agent-village
 
-A small "village" of LLM agents from different providers that work on one goal together, loosely modelled on [AI Village](https://theaidigest.org/village). Each agent takes turns, has its own Docker container, and shares one `/repo` directory, one chat, one task board and one token budget with the others. Everything is stored in SQLite, so a run can be stopped and resumed, and exported afterwards as a readable transcript.
+A small "village" of LLM agents from different providers that work on one goal together. Each agent takes turns, has its own Docker container, and shares one `/repo` directory, one chat, one task board and one token budget with the others. Everything is stored in SQLite, so a run can be stopped and resumed, and exported afterwards as a readable transcript.
+
+**[Replay the 40-round example run in your browser](https://alan746.github.io/agent-village-web/)**: every turn, command and chat message, step by step.
 
 | Villager | Role | Model | Provider |
 |---|---|---|---|
@@ -23,7 +25,7 @@ The leader closed the task and told deepseek in [round 36](examples/planner-run/
 
 The [Example run](#example-run) section has the rest of this exchange, a review that found a real bug, and a list of what went wrong. The full transcript, the villagers' repository and the run database are in [`examples/planner-run/`](examples/planner-run/).
 
-You can also replay the run step by step in the browser with the [live viewer](https://alan746.github.io/agent-village-web/); this link opens it at [chatgpt's turn in round 35](https://alan746.github.io/agent-village-web/#run=20261124_033232&round=35&turn=2). The viewer's source is in [agent-village-web](https://github.com/alan746/agent-village-web).
+To watch this exchange in the replay viewer, open it at [chatgpt's turn in round 35](https://alan746.github.io/agent-village-web/#run=20261124_033232&round=35&turn=2). The viewer's source is in [agent-village-web](https://github.com/alan746/agent-village-web).
 
 ## How it works
 
